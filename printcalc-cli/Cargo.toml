@@ -1,0 +1,24 @@
+[package]
+name = "printcalc-cli"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "printcalc"
+path = "src/main.rs"
+
+[features]
+default = ["bambu", "prusa"]
+
+# Vendor umbrella features, passed through to printcalc-lib.
+bambu = ["printcalc-lib/bambu"]
+prusa = ["printcalc-lib/prusa"]
+
+# Individual format features, also passed through, for finer-grained builds.
+bambu-3mf = ["printcalc-lib/bambu-3mf"]
+prusa-gcode = ["printcalc-lib/prusa-gcode"]
+prusa-sl1 = ["printcalc-lib/prusa-sl1"]
+prusa-bgcode = ["printcalc-lib/prusa-bgcode"]
+
+[dependencies]
+printcalc-lib = { path = "../printcalc-lib", default-features = false }
