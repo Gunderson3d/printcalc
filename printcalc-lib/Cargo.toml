@@ -3,7 +3,7 @@ name = "printcalc-lib"
 version = "0.1.0"
 edition = "2024"
 description = "Calculate 3D print job costs (material, print time, printer wear, electricity, labor, hardware) from sliced-file output. See SPEC.md."
-
+crate-type = ["cdylib","rlib"]
 [features]
 default = ["bambu", "prusa"]
 
@@ -19,6 +19,7 @@ prusa-bgcode = []
 
 [dependencies]
 binarygcode = "0.0.3"
+dirs = "6.0.0"
 gcode = "0.7.0"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.150"

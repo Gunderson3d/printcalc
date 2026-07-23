@@ -5,10 +5,10 @@ use std::fmt;
 
 use serde::Serialize;
 
-use super::filament::FilamentProfile;
+use super::filament::{FilamentProfile, MaterialKind};
 use super::job::Job;
-use super::printer::PrinterProfile;
-use crate::formats::slice_summary::{PlateSummary, SliceSummary};
+use super::printer::{PrinterKind, PrinterProfile};
+use crate::formats::slice_summary::{PlateSummary, SliceSummary, SourceFormat};
 use crate::library::GlobalConfig;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -35,9 +35,35 @@ pub enum CalcError {
     /// A `FilamentUsage` slot had nonzero usage but no entry in
     /// `job.filament`.
     MissingFilamentProfile(String),
-    /// A filament profile had neither `price_per_kg` nor `price_per_liter`
-    /// set.
-    MissingFilamentPrice(String),
+    /// A filament profile had no price in the unit its usage was reported
+    /// in (grams or ml), and no `density_g_per_cm3` to convert to the
+    /// other unit it does have a price for.
+    MissingFilamentPrice { name: String, usage_unit: &'static str },
+    /// `printer.kind` doesn't match what the sliced file's format implies
+    /// (e.g. a resin `.sl1s` costed against an FDM printer profile).
+    /// Caught up front so it doesn't surface later as a confusing
+    /// missing-price error instead.
+    PrinterKindMismatch { printer_name: String, printer_kind: PrinterKind, format: SourceFormat },
+    /// Same as `PrinterKindMismatch`, for a filament profile's `kind`.
+    FilamentKindMismatch { filament_name: String, filament_kind: MaterialKind, format: SourceFormat },
+}
+
+/// The `PrinterKind` a sliced file's format implies — only `prusa-sl1` is
+/// resin today; every other format is FDM.
+fn expected_printer_kind(format: SourceFormat) -> PrinterKind {
+    match format {
+        SourceFormat::PrusaSl1 => PrinterKind::Resin,
+        SourceFormat::Bambu3mf | SourceFormat::PrusaGcode | SourceFormat::PrusaBgcode => PrinterKind::Fdm,
+    }
+}
+
+/// The `MaterialKind` a sliced file's format implies — see
+/// [`expected_printer_kind`].
+fn expected_material_kind(format: SourceFormat) -> MaterialKind {
+    match format {
+        SourceFormat::PrusaSl1 => MaterialKind::Resin,
+        SourceFormat::Bambu3mf | SourceFormat::PrusaGcode | SourceFormat::PrusaBgcode => MaterialKind::Filament,
+    }
 }
 
 impl fmt::Display for CalcError {
@@ -47,9 +73,22 @@ impl fmt::Display for CalcError {
             CalcError::MissingFilamentProfile(slot) => {
                 write!(f, "no filament profile mapped for slot {slot}")
             }
-            CalcError::MissingFilamentPrice(name) => {
-                write!(f, "filament profile {name:?} has no price_per_kg or price_per_liter")
-            }
+            CalcError::MissingFilamentPrice { name, usage_unit } => write!(
+                f,
+                "filament profile {name:?} has no price for its usage (reported in {usage_unit}) — \
+                 set the matching price_per_kg/price_per_liter, or set density_g_per_cm3 so the \
+                 other price can be converted"
+            ),
+            CalcError::PrinterKindMismatch { printer_name, printer_kind, format } => write!(
+                f,
+                "printer {printer_name:?} is {printer_kind:?}, but {format:?} sliced files are {:?} prints",
+                expected_printer_kind(*format)
+            ),
+            CalcError::FilamentKindMismatch { filament_name, filament_kind, format } => write!(
+                f,
+                "filament profile {filament_name:?} is {filament_kind:?}, but {format:?} sliced files need {:?}",
+                expected_material_kind(*format)
+            ),
         }
     }
 }
@@ -67,6 +106,24 @@ pub fn calculate_cost(
     filament_profiles: &HashMap<String, FilamentProfile>,
     global: &GlobalConfig,
 ) -> Result<CostBreakdown, CalcError> {
+    let format = slice.source_format;
+    if printer.kind != expected_printer_kind(format) {
+        return Err(CalcError::PrinterKindMismatch {
+            printer_name: printer.name.clone(),
+            printer_kind: printer.kind,
+            format,
+        });
+    }
+    for profile in filament_profiles.values() {
+        if profile.kind != expected_material_kind(format) {
+            return Err(CalcError::FilamentKindMismatch {
+                filament_name: profile.name.clone(),
+                filament_kind: profile.kind,
+                format,
+            });
+        }
+    }
+
     let selected_plates: Vec<&PlateSummary> = match job.plate_selection {
         None => slice.plates.iter().collect(),
         Some(i) => vec![
@@ -82,11 +139,11 @@ pub fn calculate_cost(
     let mut material_cost = 0.0;
     for plate in &selected_plates {
         for usage in &plate.filament_usage {
-            // grams+price_per_kg or ml+price_per_liter, whichever the usage
-            // entry actually carries; a slot with zero of both is present
-            // but unused (Bambu AMS tray / Prusa extruder not loaded) and
-            // is skipped, per SPEC.md §3/§4.
-            let (amount, want_grams) =
+            // grams or ml, whichever the usage entry actually carries; a
+            // slot with zero of both is present but unused (Bambu AMS tray
+            // / Prusa extruder not loaded) and is skipped, per SPEC.md
+            // §3/§4.
+            let (native_amount, want_grams) =
                 match (usage.grams.filter(|&g| g != 0.0), usage.ml.filter(|&m| m != 0.0)) {
                     (Some(g), _) => (g, true),
                     (None, Some(ml)) => (ml, false),
@@ -95,8 +152,31 @@ pub fn calculate_cost(
             let profile = filament_profiles
                 .get(&usage.slot_id)
                 .ok_or_else(|| CalcError::MissingFilamentProfile(usage.slot_id.clone()))?;
-            let price_per_unit = if want_grams { profile.price_per_kg } else { profile.price_per_liter }
-                .ok_or_else(|| CalcError::MissingFilamentPrice(profile.name.clone()))?;
+            // Prefer the profile's price in the usage's own unit; if that's
+            // missing, fall back to converting the amount via
+            // density_g_per_cm3 (1 ml = 1 cm3, so grams = ml * density) and
+            // pricing it in the profile's other unit instead.
+            let (amount, price_per_unit) = match (
+                want_grams,
+                profile.price_per_kg,
+                profile.price_per_liter,
+                profile.density_g_per_cm3,
+            ) {
+                (true, Some(price), ..) => (native_amount, price),
+                (false, _, Some(price), _) => (native_amount, price),
+                (true, None, Some(price_per_liter), Some(density)) => {
+                    (native_amount / density, price_per_liter)
+                }
+                (false, Some(price_per_kg), None, Some(density)) => {
+                    (native_amount * density, price_per_kg)
+                }
+                _ => {
+                    return Err(CalcError::MissingFilamentPrice {
+                        name: profile.name.clone(),
+                        usage_unit: if want_grams { "grams" } else { "ml" },
+                    });
+                }
+            };
             let effective_factor = job
                 .material_efficiency_factor_override
                 .unwrap_or(profile.efficiency_factor);
@@ -122,7 +202,13 @@ pub fn calculate_cost(
     let effective_labor_rate = job.labor.rate_per_hour.unwrap_or(global.labor_rate_per_hour);
     let labor_cost = effective_labor_rate * (job.labor.minutes / 60.0);
 
-    let hardware_cost: f64 = job.hardware.iter().map(|h| h.cost * h.quantity as f64).sum();
+    // Not `.sum()`: f64's `Sum` impl folds from -0.0, so an empty
+    // `hardware` list (the common case) would otherwise leave
+    // `hardware_cost` as negative zero and print "$-0.00".
+    let hardware_cost: f64 = job
+        .hardware
+        .iter()
+        .fold(0.0, |acc, h| acc + h.cost * h.quantity as f64);
 
     let total_cost = material_cost + wear_cost + electricity_cost + labor_cost + hardware_cost;
 
@@ -184,6 +270,16 @@ mod tests {
             color: None,
             vendor: None,
         }
+    }
+
+    fn resin_printer() -> PrinterProfile {
+        PrinterProfile { name: "sl1-printer".into(), kind: PrinterKind::Resin, wear: bambu_a1().wear }
+    }
+
+    /// Like [`filament`], but `kind: Resin` and priced per kg instead of
+    /// per liter — used to test the density-conversion fallback.
+    fn resin_priced_per_kg(name: &str, price_per_kg: f64) -> FilamentProfile {
+        FilamentProfile { kind: MaterialKind::Resin, ..filament(name, price_per_kg) }
     }
 
     fn base_job(filament: HashMap<String, ProfileRef<FilamentProfile>>, labor_minutes: f64) -> Job {
@@ -267,6 +363,7 @@ mod tests {
         assert!((breakdown.electricity_cost - 0.0164).abs() < 1e-3);
         assert_eq!(breakdown.labor_cost, 2.5);
         assert_eq!(breakdown.hardware_cost, 0.0);
+        assert!(breakdown.hardware_cost.is_sign_positive(), "hardware_cost must not be -0.0");
         assert!((breakdown.total_cost - 2.8031).abs() < 1e-3);
         assert_eq!(breakdown.suggested_prices.len(), 3);
         for sp in &breakdown.suggested_prices {
@@ -385,5 +482,124 @@ mod tests {
 
         let err = calculate_cost(&job, &slice, &printer, &HashMap::new(), &global).unwrap_err();
         assert_eq!(err, CalcError::PlateNotFound(3));
+    }
+
+    fn resin_slice(ml: f64) -> SliceSummary {
+        SliceSummary {
+            source_format: SourceFormat::PrusaSl1,
+            plates: vec![PlateSummary {
+                plate_index: 1,
+                print_time_seconds: 3600.0,
+                filament_usage: vec![FilamentUsage {
+                    slot_id: SINGLE_FILAMENT_SLOT.into(),
+                    material_type: None,
+                    color: None,
+                    grams: None,
+                    ml: Some(ml),
+                }],
+                printer_model: None,
+                layer_height: None,
+                extra: HashMap::new(),
+            }],
+        }
+    }
+
+    /// A ml-reported usage against a profile that only has `price_per_kg`,
+    /// but does have `density_g_per_cm3`, should still price via
+    /// conversion instead of erroring.
+    #[test]
+    fn ml_usage_converts_via_density_when_only_price_per_kg_is_set() {
+        let slice = resin_slice(10.0);
+        let mut profile = resin_priced_per_kg("kg-priced-resin", 40.0);
+        profile.density_g_per_cm3 = Some(1.1);
+        let filament_profiles = HashMap::from([(SINGLE_FILAMENT_SLOT.to_string(), profile)]);
+        let job = base_job(
+            HashMap::from([(
+                SINGLE_FILAMENT_SLOT.to_string(),
+                ProfileRef::Linked { name: "kg-priced-resin".into() },
+            )]),
+            0.0,
+        );
+        let printer = resin_printer();
+        let global = GlobalConfig::default();
+
+        let breakdown = calculate_cost(&job, &slice, &printer, &filament_profiles, &global).unwrap();
+
+        // 10ml * 1.1g/ml density = 11g, * 1.1 efficiency factor = 12.1g,
+        // * $40/1000 per gram = $0.484.
+        assert!((breakdown.material_cost - 0.484).abs() < 1e-9);
+    }
+
+    /// Same mismatch, but with no `density_g_per_cm3` to bridge the units —
+    /// this is exactly what a real user hit: a filament profile with only
+    /// `price_per_kg` used against a resin (`.sl1s`, ml-reported) job.
+    #[test]
+    fn ml_usage_without_density_and_without_price_per_liter_is_an_error() {
+        let slice = resin_slice(10.0);
+        let filament_profiles = HashMap::from([(
+            SINGLE_FILAMENT_SLOT.to_string(),
+            resin_priced_per_kg("kg-only-resin", 40.0),
+        )]);
+        let job = base_job(
+            HashMap::from([(
+                SINGLE_FILAMENT_SLOT.to_string(),
+                ProfileRef::Linked { name: "kg-only-resin".into() },
+            )]),
+            0.0,
+        );
+        let printer = resin_printer();
+        let global = GlobalConfig::default();
+
+        let err = calculate_cost(&job, &slice, &printer, &filament_profiles, &global).unwrap_err();
+        assert_eq!(
+            err,
+            CalcError::MissingFilamentPrice { name: "kg-only-resin".into(), usage_unit: "ml" }
+        );
+    }
+
+    /// The exact scenario a real user hit: an FDM printer profile costed
+    /// against a resin (`.sl1s`) sliced file.
+    #[test]
+    fn fdm_printer_against_resin_slice_is_an_error() {
+        let slice = resin_slice(10.0);
+        let job = base_job(
+            HashMap::from([(SINGLE_FILAMENT_SLOT.to_string(), ProfileRef::Linked { name: "pla-basic".into() })]),
+            0.0,
+        );
+        let printer = bambu_a1(); // Fdm, but `slice` is PrusaSl1 (resin)
+        let global = GlobalConfig::default();
+
+        let err = calculate_cost(&job, &slice, &printer, &HashMap::new(), &global).unwrap_err();
+        assert_eq!(
+            err,
+            CalcError::PrinterKindMismatch {
+                printer_name: "bambu-a1".into(),
+                printer_kind: PrinterKind::Fdm,
+                format: SourceFormat::PrusaSl1,
+            }
+        );
+    }
+
+    #[test]
+    fn filament_kind_against_resin_slice_is_an_error() {
+        let slice = resin_slice(10.0);
+        let filament_profiles =
+            HashMap::from([(SINGLE_FILAMENT_SLOT.to_string(), filament("pla-basic", 20.0))]); // MaterialKind::Filament
+        let job = base_job(
+            HashMap::from([(SINGLE_FILAMENT_SLOT.to_string(), ProfileRef::Linked { name: "pla-basic".into() })]),
+            0.0,
+        );
+        let printer = resin_printer();
+        let global = GlobalConfig::default();
+
+        let err = calculate_cost(&job, &slice, &printer, &filament_profiles, &global).unwrap_err();
+        assert_eq!(
+            err,
+            CalcError::FilamentKindMismatch {
+                filament_name: "pla-basic".into(),
+                filament_kind: MaterialKind::Filament,
+                format: SourceFormat::PrusaSl1,
+            }
+        );
     }
 }

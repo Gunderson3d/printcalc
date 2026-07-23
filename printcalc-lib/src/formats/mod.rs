@@ -69,3 +69,16 @@ pub trait SliceParser {
     fn detect(bytes: &[u8], filename: &str) -> bool;
     fn parse(bytes: &[u8]) -> Result<SliceSummary, ParseError>;
 }
+
+/// Tries every parser compiled in (via feature flags) against `bytes`, in
+/// the order listed in `SPEC.md` §4, and parses with the first one whose
+/// `detect()` matches. Grows one `#[cfg]` branch per parser as later
+/// milestones add them (bambu-3mf, prusa-gcode, prusa-bgcode).
+pub fn parse_slice_file(bytes: &[u8], filename: &str) -> Result<SliceSummary, ParseError> {
+    #[cfg(feature = "prusa-sl1")]
+    if prusa_sl1::PrusaSl1::detect(bytes, filename) {
+        return prusa_sl1::PrusaSl1::parse(bytes);
+    }
+    let _ = (bytes, filename);
+    Err(ParseError::NotThisFormat)
+}
