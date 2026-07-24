@@ -1,0 +1,65 @@
+name = "bundled-job-example"
+
+[source.summary]
+source_format = "prusa-sl1"
+
+[[source.summary.plates]]
+plate_index = 1
+print_time_seconds = 2886.405
+printer_model = "SL1S"
+layer_height = 0.05
+
+[[source.summary.plates.filament_usage]]
+slot_id = "1"
+material_type = "Prusament Resin Model+ Prusa Orange @0.05 SL1S"
+ml = 2.598598
+
+# Second plate — real numbers from Testfiles/Shape-Box.sl1 (source_format
+# stays "prusa-sl1" for the whole job, even though that parser only ever
+# emits one plate per file in practice; this fixture stitches two real
+# single-plate parses together to exercise multi-plate/`--plate` handling).
+[[source.summary.plates]]
+plate_index = 2
+print_time_seconds = 4046.414
+printer_model = "SL1"
+layer_height = 0.05
+
+[[source.summary.plates.filament_usage]]
+slot_id = "1"
+material_type = "Prusament Resin Model Solid Grey @0.05"
+ml = 2.457665
+
+[printer.profile]
+name = "sl1s-printer"
+kind = "resin"
+
+[printer.profile.wear]
+purchase_price = 550.0
+additional_upfront_cost = 0.0
+estimated_life_years = 5.0
+estimated_uptime_percent = 0.4
+annual_maintenance_cost = 30.0
+power_consumption_watts = 100.0
+cost_buffer_factor = 1.2
+
+[filament.profile]
+name = "prusament-resin-orange"
+kind = "resin"
+price_per_liter = 50.0
+efficiency_factor = 1.05
+color = "orange"
+vendor = "Prusament"
+
+[labor]
+rate_per_hour = 15.0
+minutes = 15.0
+
+[[hardware]]
+name = "brass insert M3x5"
+cost = 0.12
+quantity = 4
+
+[[hardware]]
+name = "magnet 6x2mm"
+cost = 0.08
+quantity = 2

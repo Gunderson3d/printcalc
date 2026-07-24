@@ -63,7 +63,11 @@ pub struct JobInvocation {
 
 pub fn run(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
     if inv.file.extension().and_then(|e| e.to_str()) == Some("toml") {
-        let breakdown = ops::calc_job(&inv.file)?;
+        // --plate here overrides the job's own stored plate_selection for
+        // this calc only — e.g. pricing just one plate out of a Bundled
+        // job saved with "all", without needing the original sliced file.
+        let plate_override = parse_plate_override(inv.plate.as_deref())?;
+        let breakdown = ops::calc_job(&inv.file, plate_override)?;
         print_result(&breakdown, inv.format);
         return Ok(());
     }
@@ -149,6 +153,16 @@ fn parse_plate(plate: Option<&str>) -> Result<Option<u32>, Box<dyn Error>> {
     }
 }
 
+/// Same values as [`parse_plate`], but distinguishes "not given" (outer
+/// `None`, don't touch the job's own `plate_selection`) from "given as
+/// `all`" (`Some(None)`, explicitly override to every plate).
+fn parse_plate_override(plate: Option<&str>) -> Result<Option<Option<u32>>, Box<dyn Error>> {
+    match plate {
+        None => Ok(None),
+        Some(_) => parse_plate(plate).map(Some),
+    }
+}
+
 fn print_result(breakdown: &CostBreakdown, format: OutputFormat) {
     match format {
         OutputFormat::Table => print_receipt(breakdown),
@@ -163,29 +177,74 @@ const BLUE: &str = "\x1b[34m";
 const BOLD_GREEN: &str = "\x1b[1;32m";
 const RESET: &str = "\x1b[0m";
 
-/// Receipt-style, dotted-leader table format. See `SPEC.md` §7.
+/// Receipt-style, dotted-leader table format, split into sections. See
+/// `SPEC.md` §7.
+///
+/// "plates" only shows when more than one plate is actually in play — a
+/// single selected plate (whether because the job only has one, or
+/// because `--plate N` picked one out) is the "omit entirely" case from
+/// SPEC.md §7, same rule `material breakdown`/`hardware breakdown` follow.
 fn print_receipt(b: &CostBreakdown) {
     let color = std::io::stdout().is_terminal();
-    let lines = [
-        ("Material", b.material_cost, CYAN),
-        ("Printer wear", b.wear_cost, AMBER),
-        ("Electricity", b.electricity_cost, AMBER),
-        ("Labor", b.labor_cost, ROSE),
-        ("Hardware", b.hardware_cost, BLUE),
-    ];
-    let width = lines.iter().map(|(label, ..)| label.len()).max().unwrap_or(0) + 14;
+
+    let cost_labels = ["Material", "Printer wear", "Electricity", "Labor", "Hardware", "TOTAL"];
+    let plate_labels = ["Combined".to_string()];
+    let width = b
+        .plate_breakdown
+        .iter()
+        .map(|p| format!("Plate {}", p.plate_index).len())
+        .chain(plate_labels.iter().map(|s| s.len()))
+        .chain(b.material_breakdown.iter().map(|l| l.filament_name.len()))
+        .chain(b.hardware_breakdown.iter().map(|l| l.name.len()))
+        .chain(cost_labels.iter().map(|s| s.len()))
+        .max()
+        .unwrap_or(0)
+        + 14;
 
     println!();
-    for (label, value, code) in lines {
-        let dots = ".".repeat(width.saturating_sub(label.len()));
-        println!("{}", paint(&format!("  {label}{dots} ${value:.2}"), code, color));
+    if b.plate_breakdown.len() > 1 {
+        println!("plates");
+        for p in &b.plate_breakdown {
+            let label = format!("Plate {}", p.plate_index);
+            let detail = format!("{} · {}", format_duration(p.print_time_seconds), format_amount(p.grams, p.ml));
+            print_dotted(&label, &detail, width);
+        }
+        let combined_seconds: f64 = b.plate_breakdown.iter().map(|p| p.print_time_seconds).sum();
+        let combined_grams: f64 = b.plate_breakdown.iter().map(|p| p.grams).sum();
+        let combined_ml: f64 = b.plate_breakdown.iter().map(|p| p.ml).sum();
+        println!("  {}", "─".repeat(width + 3));
+        let detail = format!("{} · {}", format_duration(combined_seconds), format_amount(combined_grams, combined_ml));
+        print_dotted("Combined", &detail, width);
+        println!();
     }
+
+    if !b.material_breakdown.is_empty() {
+        println!("material breakdown");
+        for line in &b.material_breakdown {
+            let price_unit = if line.unit == "g" { "kg" } else { "L" };
+            let detail = format!("{:.2}{} @ ${:.2}/{}", line.amount, line.unit, line.unit_price, price_unit);
+            print_item_line(&line.filament_name, &detail, line.cost, width, CYAN, color);
+        }
+        println!();
+    }
+
+    if !b.hardware_breakdown.is_empty() {
+        println!("hardware breakdown");
+        for line in &b.hardware_breakdown {
+            let detail = format!("x{} @ ${:.2}", line.quantity, line.unit_cost);
+            print_item_line(&line.name, &detail, line.cost, width, BLUE, color);
+        }
+        println!();
+    }
+
+    println!("summary");
+    print_cost_line("Material", b.material_cost, width, CYAN, color);
+    print_cost_line("Printer wear", b.wear_cost, width, AMBER, color);
+    print_cost_line("Electricity", b.electricity_cost, width, AMBER, color);
+    print_cost_line("Labor", b.labor_cost, width, ROSE, color);
+    print_cost_line("Hardware", b.hardware_cost, width, BLUE, color);
     println!("  {}", "─".repeat(width + 3));
-    let dots = ".".repeat(width.saturating_sub("TOTAL".len()));
-    println!(
-        "{}",
-        paint(&format!("  TOTAL{dots} ${:.2}", b.total_cost), BOLD_GREEN, color)
-    );
+    print_cost_line("TOTAL", b.total_cost, width, BOLD_GREEN, color);
     println!();
 
     let markups: Vec<String> = b.suggested_prices.iter().map(|p| format!("{:.0}%", p.markup_percent)).collect();
@@ -198,6 +257,45 @@ fn print_receipt(b: &CostBreakdown) {
             color
         )
     );
+}
+
+/// `label` + dotted leader (to `width`) + `trailing`, uncolored — used for
+/// the plates section, which isn't part of SPEC.md §7's cost color scheme.
+fn print_dotted(label: &str, trailing: &str, width: usize) {
+    let dots = ".".repeat(width.saturating_sub(label.len()));
+    println!("  {label}{dots} {trailing}");
+}
+
+fn print_cost_line(label: &str, value: f64, width: usize, code: &str, color: bool) {
+    let dots = ".".repeat(width.saturating_sub(label.len()));
+    println!("{}", paint(&format!("  {label}{dots} ${value:.2}"), code, color));
+}
+
+/// A breakdown row: `label` + dotted leader + `detail` (the "amount @
+/// price" part) + ` = $cost`.
+fn print_item_line(label: &str, detail: &str, cost: f64, width: usize, code: &str, color: bool) {
+    let dots = ".".repeat(width.saturating_sub(label.len()));
+    println!("{}", paint(&format!("  {label}{dots} {detail} = ${cost:.2}"), code, color));
+}
+
+/// "17m17s" / "1h05m17s" style, matching SPEC.md §7's plate mockup.
+fn format_duration(seconds: f64) -> String {
+    let total = seconds.round() as i64;
+    let h = total / 3600;
+    let m = (total % 3600) / 60;
+    let s = total % 60;
+    if h > 0 { format!("{h}h{m:02}m{s:02}s") } else { format!("{m}m{s:02}s") }
+}
+
+/// "6.66g", "2.60ml", or "6.66g + 2.60ml" if a plate somehow has both
+/// (grams/ml are 0.0 rather than absent when not applicable).
+fn format_amount(grams: f64, ml: f64) -> String {
+    match (grams > 0.0, ml > 0.0) {
+        (true, true) => format!("{grams:.2}g + {ml:.2}ml"),
+        (true, false) => format!("{grams:.2}g"),
+        (false, true) => format!("{ml:.2}ml"),
+        (false, false) => "0g".to_string(),
+    }
 }
 
 fn paint(text: &str, code: &str, enabled: bool) -> String {

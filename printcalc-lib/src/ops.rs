@@ -206,8 +206,17 @@ pub fn load_job(path: &Path) -> Result<Job, OpsError> {
 /// the local library, for `Linked` — embedded profiles need no lookup) and
 /// its slice data (re-parsed from `source.path`, or read straight off
 /// `source.summary` for a Bundled job), then runs [`cost::calculate_cost`].
-pub fn calc_job(job_path: &Path) -> Result<CostBreakdown, OpsError> {
-    let job = load_job(job_path)?;
+///
+/// `plate_override`, if `Some`, replaces the job's own `plate_selection`
+/// for this calc only (the file on disk is untouched) — `Some(None)` means
+/// "every plate", `Some(Some(n))` means plate `n`. Lets a job saved with
+/// `plate = "all"` (e.g. a Bundled job with the original sliced file long
+/// gone) still be priced one plate at a time on demand.
+pub fn calc_job(job_path: &Path, plate_override: Option<Option<u32>>) -> Result<CostBreakdown, OpsError> {
+    let mut job = load_job(job_path)?;
+    if let Some(plate_selection) = plate_override {
+        job.plate_selection = plate_selection;
+    }
     let slice = resolve_slice_summary(&job, job_path)?;
     calc_job_data(&job, &slice)
 }
@@ -269,6 +278,40 @@ mod tests {
 
     fn sl1_fixture_path() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../Testfiles/Shape-Box.sl1s")
+    }
+
+    /// `Testfiles/bundled-job-example.toml` — a real Bundled-tier job
+    /// (embedded profiles + embedded slice summary from `Shape-Box.sl1s`),
+    /// generated via the CLI itself with `--type bundled`. Calc'ing it
+    /// needs no library and no original sliced file — checked here by
+    /// simply not setting `PRINTCALC_CONFIG_DIR` at all. Doesn't assert
+    /// `electricity_cost`/`total_cost`: those still fall back to whatever
+    /// `~/.config/printcalc/config.toml` says (per SPEC.md — electricity
+    /// price isn't baked into a job even at the Bundled tier), so
+    /// asserting them here would make the test depend on ambient host
+    /// config instead of this fixture.
+    #[test]
+    fn calc_job_resolves_the_bundled_example_fixture() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../Testfiles/bundled-job-example.toml");
+
+        // Default (no override): both plates summed.
+        let breakdown = calc_job(&path, None).unwrap();
+        assert!((breakdown.material_cost - 0.2654538075).abs() < 1e-6);
+        assert_eq!(breakdown.material_breakdown.len(), 1);
+        assert_eq!(breakdown.material_breakdown[0].filament_name, "prusament-resin-orange");
+        assert_eq!(breakdown.labor_cost, 3.75); // $15/hr * 15 minutes
+        assert_eq!(breakdown.hardware_cost, 0.64); // 4 * $0.12 + 2 * $0.08
+        assert_eq!(breakdown.hardware_breakdown.len(), 2);
+
+        // --plate 1 override: just the first plate's material.
+        let plate1 = calc_job(&path, Some(Some(1))).unwrap();
+        assert!((plate1.material_cost - 0.136426395).abs() < 1e-6);
+
+        // --plate 3 doesn't exist (only plates 1 and 2 are in this fixture).
+        assert!(matches!(
+            calc_job(&path, Some(Some(3))).unwrap_err(),
+            OpsError::Calc(CalcError::PlateNotFound(3))
+        ));
     }
 
     #[test]
@@ -386,7 +429,7 @@ mod tests {
 
         let path = temp_job_path("bundled");
         save_job(&job, &path).unwrap();
-        let breakdown = calc_job(&path).unwrap();
+        let breakdown = calc_job(&path, None).unwrap();
         let _ = fs::remove_file(&path);
 
         // 10ml * 1.0 factor * ($40/1000) = $0.40
@@ -452,7 +495,7 @@ mod tests {
 
         let path = temp_job_path("default-tier");
         save_job(&outcome.job, &path).unwrap();
-        let breakdown = calc_job(&path).unwrap();
+        let breakdown = calc_job(&path, None).unwrap();
         let _ = fs::remove_file(&path);
         let _ = fs::remove_dir_all(&config_dir);
         unsafe {
