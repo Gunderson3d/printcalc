@@ -75,6 +75,10 @@ pub trait SliceParser {
 /// `detect()` matches. Grows one `#[cfg]` branch per parser as later
 /// milestones add them (bambu-3mf, prusa-gcode, prusa-bgcode).
 pub fn parse_slice_file(bytes: &[u8], filename: &str) -> Result<SliceSummary, ParseError> {
+    #[cfg(feature = "bambu-3mf")]
+    if bambu_3mf::Bambu3mf::detect(bytes, filename) {
+        return bambu_3mf::Bambu3mf::parse(bytes);
+    }
     #[cfg(feature = "prusa-sl1")]
     if prusa_sl1::PrusaSl1::detect(bytes, filename) {
         return prusa_sl1::PrusaSl1::parse(bytes);
