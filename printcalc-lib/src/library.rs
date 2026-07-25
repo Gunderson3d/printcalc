@@ -1,5 +1,5 @@
 //! Profile library load/save (`~/.config/printcalc/{printers,filaments}/*.toml`)
-//! and global config (`~/.config/printcalc/config.toml`). See `SPEC.md` §6.
+//! and global config (`~/.config/printcalc/config.toml`).
 //!
 //! Filesystem-only — not available to `printcalc-wasm`, which has no
 //! filesystem and instead receives embedded profiles directly.
@@ -49,7 +49,7 @@ impl From<std::io::Error> for LibraryError {
     }
 }
 
-/// `~/.config/printcalc/config.toml`. See `SPEC.md` §5.
+/// `~/.config/printcalc/config.toml`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GlobalConfig {
     /// Fallback for `Job::electricity_cost_per_kwh_override`.
@@ -97,9 +97,8 @@ pub fn filaments_dir() -> PathBuf {
 /// Falls back to [`GlobalConfig::default`] if `config.toml` can't be read
 /// — not just missing, *any* read failure. There's no `printcalc config
 /// init` step, so a fresh install (or a platform with no real filesystem
-/// at all, like `printcalc-wasm` in a browser — see `SPEC.md` §6, §8) just
-/// works with the defaults from `SPEC.md` §5 instead of hard-failing
-/// every calc.
+/// at all, like `printcalc-wasm` in a browser) just works with the
+/// defaults instead of hard-failing every calc.
 pub fn load_global_config() -> Result<GlobalConfig, LibraryError> {
     let path = config_dir().join("config.toml");
     match fs::read_to_string(&path) {

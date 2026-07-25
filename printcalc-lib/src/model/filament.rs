@@ -1,4 +1,4 @@
-//! `FilamentProfile` (filament and resin materials). See `SPEC.md` §2.
+//! `FilamentProfile` (filament and resin materials).
 
 use serde::{Deserialize, Serialize};
 
@@ -17,7 +17,7 @@ pub enum MaterialKind {
 
 /// A reusable material definition, saved under `~/.config/printcalc/filaments/`
 /// and referenced from jobs by name (or embedded directly), keyed by slot in
-/// [`super::job::Job::filament`]. See `SPEC.md` §2, §5.
+/// [`super::job::Job::filament`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FilamentProfile {
     /// Also the filename stem it's saved under.
@@ -27,7 +27,7 @@ pub struct FilamentProfile {
     /// Price per kilogram — the common case for filament. At least one of
     /// `price_per_kg`/`price_per_liter` must be set (or reachable via
     /// `density_g_per_cm3` conversion from the other) for the profile to
-    /// be costable against a given usage. `SPEC.md` §3.
+    /// be costable against a given usage.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub price_per_kg: Option<f64>,
     /// Price per liter — the common case for resin.
@@ -41,7 +41,7 @@ pub struct FilamentProfile {
     pub density_g_per_cm3: Option<f64>,
     /// Waste/purge multiplier applied to raw usage before pricing (e.g.
     /// `1.1` = price for 10% more than the slicer reported was actually
-    /// used). `SPEC.md` §3.
+    /// used).
     pub efficiency_factor: f64,
     /// Free-form display color, e.g. `"black"` or a hex code.
     #[serde(default, skip_serializing_if = "Option::is_none")]

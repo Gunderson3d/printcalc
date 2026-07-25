@@ -1,5 +1,5 @@
 //! `SliceSummary`: the common shape extracted from any supported slicer
-//! output. See `SPEC.md` §2.
+//! output.
 //!
 //! Always compiled regardless of which parser features are enabled — a
 //! Bundled job (§5) embeds a `SliceSummary` directly and needs no parser at
@@ -9,10 +9,10 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-/// Which slicer/format a [`SliceSummary`] was extracted from. `SPEC.md` §4.
+/// Which slicer/format a [`SliceSummary`] was extracted from.
 ///
-/// `#[non_exhaustive]`: more formats land over time (`SPEC.md` §9), and
-/// each is a new variant here.
+/// `#[non_exhaustive]`: more formats land over time, and each is a new
+/// variant here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum SourceFormat {
@@ -32,7 +32,6 @@ pub enum SourceFormat {
 
 /// The common shape every format parser ([`crate::formats::SliceParser`])
 /// extracts from a sliced file — print time and material usage, per plate.
-/// See `SPEC.md` §2.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SliceSummary {
     /// Which parser produced this summary.
@@ -50,7 +49,7 @@ impl SliceSummary {
     /// to. That's not always `"1"`: Bambu single-tray and Prusa's
     /// scalar single-extruder case both normalize to `"1"`, but a
     /// multi-extruder-*capable* printer's comma-list metadata numbers
-    /// slots from `0` even when only one ends up used (`SPEC.md` §4).
+    /// slots from `0` even when only one ends up used.
     pub fn distinct_filament_slots(&self) -> Vec<String> {
         let mut slots: Vec<String> = self
             .plates
@@ -66,7 +65,7 @@ impl SliceSummary {
 }
 
 /// One plate's worth of a sliced file — print time and every filament slot
-/// with nonzero usage on it. `SPEC.md` §2.
+/// with nonzero usage on it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlateSummary {
     /// 1-based, matches the slicer's own plate numbering.
@@ -90,7 +89,6 @@ pub struct PlateSummary {
 
 /// One filament/resin slot's usage on a plate — a Bambu AMS tray, a
 /// multi-extruder Prusa slot, or the sole slot of a single-material print.
-/// `SPEC.md` §2, §4.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FilamentUsage {
     /// Opaque, format-native slot id — whatever the slicer itself uses to
@@ -134,7 +132,7 @@ mod tests {
                 PlateSummary {
                     plate_index: 2,
                     print_time_seconds: 100.0,
-                    filament_usage: vec![usage("1", 1.0)], // repeated across plates
+                    filament_usage: vec![usage("1", 1.0)],
                     printer_model: None,
                     layer_height: None,
                     extra: HashMap::new(),

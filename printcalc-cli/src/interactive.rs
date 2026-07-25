@@ -1,7 +1,6 @@
 //! Shared prompt helpers. Interactive is the default across the whole CLI —
 //! any required value not passed as a flag gets prompted for; `--no-input`
 //! turns that off and fails fast instead, naming the missing flag.
-//! See `SPEC.md` §7.
 
 use std::error::Error;
 use std::io::{self, Write};

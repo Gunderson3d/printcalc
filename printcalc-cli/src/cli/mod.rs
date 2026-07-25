@@ -1,4 +1,4 @@
-//! Subcommand modules. See `SPEC.md` §7.
+//! Subcommand modules.
 
 pub mod filament;
 pub mod job;

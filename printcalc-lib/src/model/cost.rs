@@ -1,4 +1,4 @@
-//! `CostBreakdown` and `SuggestedPrice`. See `SPEC.md` §2, §3.
+//! `CostBreakdown` and `SuggestedPrice`.
 
 use std::collections::HashMap;
 use std::fmt;
@@ -12,20 +12,19 @@ use crate::formats::slice_summary::{PlateSummary, SliceSummary, SourceFormat};
 use crate::library::GlobalConfig;
 
 /// The full cost breakdown for a job, returned by [`calculate_cost`].
-/// `SPEC.md` §2, §3, §7.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct CostBreakdown {
-    /// One entry per selected plate (`SPEC.md` §7's plate breakdown),
-    /// in `plate_index` order. Raw slicer numbers, not efficiency-factor-
-    /// adjusted like `MaterialLine::amount` — this describes what the
-    /// slicer reported per plate, not what buying enough material costs.
+    /// One entry per selected plate, in `plate_index` order. Raw slicer
+    /// numbers, not efficiency-factor-adjusted like `MaterialLine::amount`
+    /// — this describes what the slicer reported per plate, not what
+    /// buying enough material costs.
     pub plate_breakdown: Vec<PlateLine>,
     /// Total material cost across every selected plate/slot.
     pub material_cost: f64,
     /// `material_cost` split by contributing filament profile name — one
-    /// entry per distinct profile, sorted by name. `SPEC.md` §7: a job
-    /// where every slot happens to share one profile still collapses back
-    /// to a single entry here.
+    /// entry per distinct profile, sorted by name. A job where every slot
+    /// happens to share one profile still collapses back to a single entry
+    /// here.
     pub material_breakdown: Vec<MaterialLine>,
     /// Printer depreciation cost for the selected print time.
     pub wear_cost: f64,
@@ -103,7 +102,7 @@ pub struct SuggestedPrice {
     pub price: f64,
 }
 
-/// Why [`calculate_cost`] couldn't cost a job. `SPEC.md` §3.
+/// Why [`calculate_cost`] couldn't cost a job.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum CalcError {
@@ -194,7 +193,7 @@ impl std::error::Error for CalcError {}
 /// Cost breakdown for `job` against the already-parsed `slice`, using
 /// already-resolved profiles (a [`super::job::ProfileRef::Linked`] must be
 /// resolved against the profile library — or, for WASM, supplied directly
-/// by the caller — before reaching here; see `SPEC.md` §3, §6).
+/// by the caller — before reaching here).
 pub fn calculate_cost(
     job: &Job,
     slice: &SliceSummary,
@@ -251,8 +250,7 @@ pub fn calculate_cost(
         for usage in &plate.filament_usage {
             // grams or ml, whichever the usage entry actually carries; a
             // slot with zero of both is present but unused (Bambu AMS tray
-            // / Prusa extruder not loaded) and is skipped, per SPEC.md
-            // §3/§4.
+            // / Prusa extruder not loaded) and is skipped.
             let (native_amount, want_grams) =
                 match (usage.grams.filter(|&g| g != 0.0), usage.ml.filter(|&m| m != 0.0)) {
                     (Some(g), _) => (g, true),
@@ -430,8 +428,8 @@ mod tests {
         }
     }
 
-    /// Reference worksheet example from SPEC.md §3: 800 dollar printer, 5yr
-    /// life, 50% uptime, 160W, 0.14/kWh, 1.3 buffer.
+    /// Reference worksheet example: 800 dollar printer, 5yr life, 50%
+    /// uptime, 160W, 0.14/kWh, 1.3 buffer.
     #[test]
     fn wear_and_electricity_rate_per_hour() {
         let wear = &bambu_a1().wear;
@@ -445,7 +443,7 @@ mod tests {
         assert!((combined - 0.10).abs() < 5e-3);
     }
 
-    /// SPEC.md §7 multi-plate example: two Bambu plates, single filament.
+    /// Multi-plate worked example: two Bambu plates, single filament.
     #[test]
     fn multi_plate_single_filament_matches_worked_example() {
         let slice = SliceSummary {
@@ -522,7 +520,7 @@ mod tests {
         }
     }
 
-    /// SPEC.md §7 multi-filament example: one plate, three AMS slots priced
+    /// Multi-filament worked example: one plate, three AMS slots priced
     /// against three different profiles.
     #[test]
     fn multi_slot_filament_splits_material_cost() {

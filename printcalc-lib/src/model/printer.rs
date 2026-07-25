@@ -1,9 +1,9 @@
-//! `PrinterProfile` and its wear/depreciation model. See `SPEC.md` §2, §3.
+//! `PrinterProfile` and its wear/depreciation model.
 
 use serde::{Deserialize, Serialize};
 
 /// Which physical process a printer uses — determines which sliced
-/// formats (`SPEC.md` §4) and filament kinds ([`super::filament::MaterialKind`])
+/// formats and filament kinds ([`super::filament::MaterialKind`])
 /// are compatible with it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -15,7 +15,7 @@ pub enum PrinterKind {
 }
 
 /// A reusable printer definition, saved under `~/.config/printcalc/printers/`
-/// and referenced from jobs by name (or embedded directly). See `SPEC.md` §5.
+/// and referenced from jobs by name (or embedded directly).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PrinterProfile {
     /// Also the filename stem it's saved under.
@@ -27,7 +27,7 @@ pub struct PrinterProfile {
 }
 
 /// Depreciation and running-cost inputs for [`PrinterProfile`], consumed by
-/// [`super::cost::calculate_cost`] (`SPEC.md` §3). Electricity price isn't
+/// [`super::cost::calculate_cost`]. Electricity price isn't
 /// here — it's a per-job or global-config value, since it depends on where
 /// you pay your bill from, not which printer ran the job.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -45,6 +45,6 @@ pub struct WearProfile {
     /// The printer's own power draw while printing.
     pub power_consumption_watts: f64,
     /// Multiplier applied to the computed wear/electricity rate — a safety
-    /// margin over the raw depreciation math (`SPEC.md` §3).
+    /// margin over the raw depreciation math.
     pub cost_buffer_factor: f64,
 }

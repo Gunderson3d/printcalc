@@ -1,5 +1,4 @@
 //! `SliceParser` trait, format detection, and per-slicer parsers.
-//! See `SPEC.md` §2, §4.
 
 use std::fmt;
 
@@ -66,7 +65,7 @@ impl From<zip::result::ZipError> for ParseError {
     }
 }
 
-/// Implemented by each per-slicer format module. See `SPEC.md` §2.
+/// Implemented by each per-slicer format module.
 pub trait SliceParser {
     /// Cheap check for whether `bytes`/`filename` look like this parser's
     /// format, used to pick a parser before committing to a full [`Self::parse`].
@@ -77,10 +76,10 @@ pub trait SliceParser {
     fn parse(bytes: &[u8]) -> Result<SliceSummary, ParseError>;
 }
 
-/// Tries every parser compiled in (via feature flags) against `bytes`, in
-/// the order listed in `SPEC.md` §4, and parses with the first one whose
-/// `detect()` matches. Grows one `#[cfg]` branch per parser as later
-/// milestones add them (bambu-3mf, prusa-gcode, prusa-bgcode).
+/// Tries every parser compiled in (via feature flags) against `bytes`, and
+/// parses with the first one whose `detect()` matches. Grows one `#[cfg]`
+/// branch per parser as later milestones add them (bambu-3mf, prusa-gcode,
+/// prusa-bgcode).
 pub fn parse_slice_file(bytes: &[u8], filename: &str) -> Result<SliceSummary, ParseError> {
     #[cfg(feature = "bambu-3mf")]
     if bambu_3mf::Bambu3mf::detect(bytes, filename) {

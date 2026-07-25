@@ -2,8 +2,7 @@
 //! add/list/show for printer & filament profiles.
 //!
 //! Both `printcalc-cli` and `printcalc-wasm` call these directly rather than
-//! reimplementing any of this logic themselves — see the "Principle" note
-//! in `SPEC.md` §1.
+//! reimplementing any of this logic themselves.
 
 use std::collections::HashMap;
 use std::fmt;
@@ -72,8 +71,6 @@ impl From<LibraryError> for OpsError {
     }
 }
 
-// --- printer profiles ---
-
 /// Saves a printer profile to the local library, overwriting any existing
 /// one under the same name.
 pub fn add_printer(profile: &PrinterProfile) -> Result<(), OpsError> {
@@ -89,8 +86,6 @@ pub fn list_printers() -> Result<Vec<String>, OpsError> {
 pub fn show_printer(name: &str) -> Result<PrinterProfile, OpsError> {
     Ok(library::load_printer(name)?)
 }
-
-// --- filament profiles ---
 
 /// Saves a filament profile to the local library, overwriting any existing
 /// one under the same name.
@@ -108,11 +103,9 @@ pub fn show_filament(name: &str) -> Result<FilamentProfile, OpsError> {
     Ok(library::load_filament(name)?)
 }
 
-// --- job ---
-
-/// Which shape to write printer/filament refs and the source in — see
-/// `SPEC.md` §5. Not a field on [`Job`] itself: tier is just which
-/// `ProfileRef`/`JobSource` variant gets built, chosen once at creation.
+/// Which shape to write printer/filament refs and the source in. Not a
+/// field on [`Job`] itself: tier is just which `ProfileRef`/`JobSource`
+/// variant gets built, chosen once at creation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JobTier {
     /// Printer/filament linked by name; source kept as a path re-parsed at
@@ -138,7 +131,7 @@ pub struct NewJobParams {
     /// slot_id (not always `"1"`, see
     /// [`SliceSummary::distinct_filament_slots`](crate::formats::slice_summary::SliceSummary::distinct_filament_slots))
     /// is the caller's job, same as `[filament]` vs `[filaments]` is just
-    /// two TOML shapes for the same underlying map (`SPEC.md` §2, §5).
+    /// two TOML shapes for the same underlying map.
     pub filament_names: HashMap<String, String>,
     /// `None` => every plate; `Some(i)` => just plate `i`.
     pub plate_selection: Option<u32>,
@@ -155,12 +148,11 @@ pub struct NewJobOutcome {
     /// The built job.
     pub job: Job,
     /// The parsed sliced file — handed back so a caller previewing the
-    /// cost without saving (`SPEC.md` §7's bare `printcalc <slice>` form)
-    /// doesn't need to re-read and re-parse it via [`calc_job_data`].
+    /// cost without saving (the bare `printcalc <slice>` form) doesn't
+    /// need to re-read and re-parse it via [`calc_job_data`].
     pub slice: SliceSummary,
     /// `--plate` was given but the sliced file only has one plate to begin
-    /// with. `SPEC.md` §7: "`--plate` is ignored (with a warning) for
-    /// single-plate formats" — the CLI is responsible for the warning
+    /// with, so it's ignored — the CLI is responsible for the warning
     /// text, this just tells it whether to print one.
     pub plate_selection_ignored: bool,
 }
@@ -190,7 +182,7 @@ pub fn new_job(params: NewJobParams) -> Result<NewJobOutcome, OpsError> {
 /// [`parse_slice`]. `Full`/`Bundled` load the named printer/filament
 /// profiles from the library to embed them (erroring if either isn't
 /// saved yet) — `Default` just links by name, no library access needed
-/// here. See `SPEC.md` §5, §7.
+/// here.
 pub fn new_job_from_slice(params: NewJobParams, summary: SliceSummary) -> Result<NewJobOutcome, OpsError> {
     let plate_selection_ignored = params.plate_selection.is_some() && summary.plates.len() <= 1;
     let plate_selection = if plate_selection_ignored { None } else { params.plate_selection };
@@ -248,9 +240,8 @@ pub fn load_job(path: &Path) -> Result<Job, OpsError> {
 }
 
 /// Parses job TOML already in hand — no filesystem access, so this is
-/// what `printcalc-wasm` uses (no filesystem to `load_job` from at all;
-/// see `SPEC.md` §6, §8) and what `load_job` itself calls after reading
-/// the file.
+/// what `printcalc-wasm` uses (no filesystem to `load_job` from at all)
+/// and what `load_job` itself calls after reading the file.
 pub fn parse_job(text: &str) -> Result<Job, OpsError> {
     toml::from_str(text).map_err(|e| OpsError::Toml(e.to_string()))
 }
@@ -275,8 +266,8 @@ pub fn calc_job(job_path: &Path, plate_override: Option<Option<u32>>) -> Result<
 }
 
 /// Same as [`calc_job`], but for a `job`/`slice` already in hand — used to
-/// preview a job's cost without writing it to disk first (`SPEC.md` §7's
-/// bare `printcalc <slice>` form, no `-o`).
+/// preview a job's cost without writing it to disk first (the bare
+/// `printcalc <slice>` form, no `-o`).
 pub fn calc_job_data(job: &Job, slice: &SliceSummary) -> Result<CostBreakdown, OpsError> {
     let printer = resolve_printer(&job.printer)?;
     let filament_profiles = resolve_filaments(&job.filament)?;
@@ -291,7 +282,7 @@ pub fn calc_job_data(job: &Job, slice: &SliceSummary) -> Result<CostBreakdown, O
 /// against the library to embed them; for `Bundled`, also parses
 /// `source.path` (if it isn't already `Embedded`) to embed the
 /// `SliceSummary` too — the point being the result no longer needs the
-/// library or the original sliced file at calc time. `SPEC.md` §5, §8.
+/// library or the original sliced file at calc time.
 pub fn retier_job(job_path: &Path, tier: JobTier) -> Result<Job, OpsError> {
     if tier == JobTier::Default {
         return Err(OpsError::Toml(
@@ -371,10 +362,10 @@ mod tests {
     /// needs no library and no original sliced file — checked here by
     /// simply not setting `PRINTCALC_CONFIG_DIR` at all. Doesn't assert
     /// `electricity_cost`/`total_cost`: those still fall back to whatever
-    /// `~/.config/printcalc/config.toml` says (per SPEC.md — electricity
-    /// price isn't baked into a job even at the Bundled tier), so
-    /// asserting them here would make the test depend on ambient host
-    /// config instead of this fixture.
+    /// `~/.config/printcalc/config.toml` says (electricity price isn't
+    /// baked into a job even at the Bundled tier), so asserting them here
+    /// would make the test depend on ambient host config instead of this
+    /// fixture.
     #[test]
     fn calc_job_resolves_the_bundled_example_fixture() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../Testfiles/bundled-job-example.toml");

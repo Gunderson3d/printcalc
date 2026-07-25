@@ -19,7 +19,7 @@
 //!
 //! This module takes a plain iterator of bare `key = value` lines either
 //! way, so both callers feed it the same shape once they've stripped
-//! their own container's framing. See `SPEC.md` §4.
+//! their own container's framing.
 
 use std::collections::HashMap;
 
@@ -45,8 +45,8 @@ pub fn parse_lines<'a>(lines: impl Iterator<Item = &'a str>) -> HashMap<String, 
 ///
 /// `filament used [g]` is either a plain scalar (single-extruder print —
 /// one `FilamentUsage`, `slot_id` normalized to `"1"` to line up with
-/// Bambu's single-tray convention and the `--filament`/`[filament]` sugar,
-/// `SPEC.md` §5 §7) or a comma-separated list, one value per extruder slot
+/// Bambu's single-tray convention and the `--filament`/`[filament]` sugar)
+/// or a comma-separated list, one value per extruder slot
 /// on a multi-extruder printer (XL, Core One IDEX) — one `FilamentUsage`
 /// per nonzero entry, `slot_id` = its 0-based position in the list.
 /// `filament_type`/`filament_colour` follow the same shape, just
@@ -163,7 +163,6 @@ mod tests {
     fn build_slice_summary_requires_time_and_grams() {
         let mut metadata = HashMap::new();
         metadata.insert("filament used [g]".to_string(), "3.10".to_string());
-        // missing the time key
         assert!(build_slice_summary(&metadata, SourceFormat::PrusaGcode).is_err());
     }
 }

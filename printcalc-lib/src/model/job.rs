@@ -1,5 +1,4 @@
 //! `Job`, `ProfileRef`, and the three job tiers (Default/Full/Bundled).
-//! See `SPEC.md` §2, §5.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -12,8 +11,7 @@ use super::printer::PrinterProfile;
 use crate::formats::slice_summary::SliceSummary;
 
 /// Either a profile linked by name (resolved against the local library at
-/// calc time) or a profile embedded directly in the job file. See
-/// `SPEC.md` §2, §5.
+/// calc time) or a profile embedded directly in the job file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ProfileRef<T> {
@@ -43,7 +41,7 @@ impl<T> ProfileRef<T> {
 
 /// Where a job's [`crate::formats::slice_summary::SliceSummary`] comes
 /// from. `Path` is re-parsed at calc time (Default/Full tiers); `Embedded`
-/// needs no sliced file at all (Bundled tier). `SPEC.md` §5.
+/// needs no sliced file at all (Bundled tier).
 #[derive(Debug, Clone, PartialEq)]
 pub enum JobSource {
     /// Re-parsed from this path (relative to the job file's own location,
@@ -54,7 +52,7 @@ pub enum JobSource {
 }
 
 /// Labor cost input for a job. No sensible global default for `minutes` —
-/// unlike `rate_per_hour`, it's always job-specific. `SPEC.md` §3.
+/// unlike `rate_per_hour`, it's always job-specific.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct LaborCost {
     /// `None` => fall back to the global config default.
@@ -65,7 +63,7 @@ pub struct LaborCost {
 }
 
 /// A flat per-piece extra cost (inserts, magnets, ...) added on top of
-/// material/wear/electricity/labor. `SPEC.md` §2, §3.
+/// material/wear/electricity/labor.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HardwareItem {
     /// e.g. "brass insert M3x5".
@@ -76,15 +74,14 @@ pub struct HardwareItem {
     pub quantity: u32,
 }
 
-/// Slot id the `[filament]` (singular) sugar always maps to. See `SPEC.md`
-/// §2, §5.
+/// Slot id the `[filament]` (singular) sugar always maps to.
 pub const SINGLE_FILAMENT_SLOT: &str = "1";
 
 /// A costable print job: which sliced file (or embedded slice data), which
 /// printer/filament profiles to price it against, and whatever job-
 /// specific overrides/extras apply. Built via
 /// [`crate::ops::new_job`]/[`crate::ops::new_job_from_slice`], costed via
-/// [`super::cost::calculate_cost`]. `SPEC.md` §2, §5.
+/// [`super::cost::calculate_cost`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct Job {
     /// A free-form label — not used for anything besides display/output.
@@ -107,15 +104,15 @@ pub struct Job {
     pub labor: LaborCost,
     /// Extra flat costs beyond material/wear/electricity/labor.
     pub hardware: Vec<HardwareItem>,
-    /// `None` => fall back to the global config default (`SPEC.md` §5:
-    /// `[50.0, 60.0, 70.0]`).
+    /// `None` => fall back to the global config default (`[50.0, 60.0,
+    /// 70.0]`).
     pub markup_percentages_override: Option<Vec<f64>>,
 }
 
-// --- wire format: mirrors the TOML shapes in SPEC.md §5 exactly. Hand-
-// rolled (De)Serialize on Job instead of a derive, since "exactly one of
+// Wire format mirrors the TOML shapes used on disk exactly. Hand-rolled
+// (De)Serialize on Job instead of a derive, since "exactly one of
 // `path`/`summary`" and "exactly one of `filament`/`filaments`" can't be
-// expressed by derive alone. ---
+// expressed by derive alone.
 
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]

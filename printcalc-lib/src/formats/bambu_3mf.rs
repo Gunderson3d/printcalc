@@ -5,7 +5,7 @@
 //! with `prediction`/`weight`/`<filament>`) and `Metadata/project_settings.config`
 //! (JSON, `printer_model`). Confirmed against `Testfiles/single_plate.gcode.3mf`,
 //! `multi_plate.gcode.3mf`, `single_plate_multicolor.gcode.3mf`, and
-//! `multi_plate_multicolor.gcode.3mf`. See `SPEC.md` §4.
+//! `multi_plate_multicolor.gcode.3mf`.
 
 use std::collections::HashMap;
 use std::io::{Cursor, Read, Seek};
@@ -41,7 +41,7 @@ impl SliceParser for Bambu3mf {
 
 /// Content-sniff fallback for a renamed file: a zip containing
 /// `3D/3dmodel.model` — the one entry every 3MF has that a Prusa `.sl1`/
-/// `.sl1s` zip (which has `config.ini` instead) never does. See `SPEC.md` §4.
+/// `.sl1s` zip (which has `config.ini` instead) never does.
 fn looks_like_3mf_zip(bytes: &[u8]) -> bool {
     if !bytes.starts_with(b"PK\x03\x04") {
         return false;
@@ -71,7 +71,7 @@ fn attr(attributes: &[OwnedAttribute], name: &str) -> Option<String> {
 /// `<plate>`, one [`FilamentUsage`] per `<filament>` inside it (slot_id =
 /// its `id` attribute, grams = `used_g`). `<metadata key="weight">` is the
 /// slicer's own total and isn't separately stored — it's just the sum of
-/// the `<filament>` elements already captured, per `SPEC.md` §4.
+/// the `<filament>` elements already captured.
 fn parse_slice_info(xml_text: &str, printer_model: Option<&str>) -> Result<Vec<PlateSummary>, ParseError> {
     let mut plates = Vec::new();
     let mut in_plate = false;

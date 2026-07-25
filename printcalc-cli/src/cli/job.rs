@@ -2,7 +2,7 @@
 //! `file` positional on the top-level `Cli` (see `main.rs`) dispatches
 //! straight here. A `.toml` path calcs an existing job; anything else is
 //! parsed as a sliced file and turned into one. Arg parsing + printing
-//! only — all real logic is `printcalc_lib::ops::*`. See `SPEC.md` §7.
+//! only — all real logic is `printcalc_lib::ops::*`.
 
 use std::collections::HashMap;
 use std::error::Error;
@@ -22,7 +22,7 @@ pub enum OutputFormat {
     Json,
 }
 
-/// Which job tier to build — see `SPEC.md` §5. Named to match `--type`.
+/// Which job tier to build. Named to match `--type`.
 #[derive(Clone, Copy, ValueEnum)]
 pub enum JobType {
     Default,
@@ -90,10 +90,9 @@ pub fn run(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
 
 /// `file` isn't a `.toml` — parse it as a sliced file and build a job. With
 /// `-o`, save it (no calc shown, matching the old `job new`). Without,
-/// nothing is written at all — just resolve refs and show the cost, per
-/// SPEC.md's "just pass in the [slice] file" bare-invocation form.
+/// nothing is written at all — just resolve refs and show the cost, for
+/// the bare `printcalc <slice>` invocation form.
 fn new_job_flow(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
-    // Fail fast on an unparseable file before asking the user anything.
     let slice = ops::parse_slice(&inv.file)?;
     let plate_selection = parse_plate(inv.plate.as_deref())?;
 
@@ -171,10 +170,10 @@ fn parse_plate_override(plate: Option<&str>) -> Result<Option<Option<u32>>, Box<
     }
 }
 
-/// Builds the slot_id -> filament name map for a new job. See `SPEC.md`
-/// §7: `--filament` (one profile for the whole job) and `--filament-map`
-/// (`slot=name` pairs) are mutually exclusive, both just two ways to
-/// write the same underlying map. When neither is given, `--interactive`
+/// Builds the slot_id -> filament name map for a new job. `--filament`
+/// (one profile for the whole job) and `--filament-map` (`slot=name`
+/// pairs) are mutually exclusive, both just two ways to write the same
+/// underlying map. When neither is given, `--interactive`
 /// only prompts per-slot if the slice actually has more than one nonzero
 /// `FilamentUsage` — a single-material file still gets one plain prompt.
 fn resolve_filament_names(
@@ -260,13 +259,12 @@ const BLUE: &str = "\x1b[34m";
 const BOLD_GREEN: &str = "\x1b[1;32m";
 const RESET: &str = "\x1b[0m";
 
-/// Receipt-style, dotted-leader table format, split into sections. See
-/// `SPEC.md` §7.
+/// Receipt-style, dotted-leader table format, split into sections.
 ///
 /// "plates" only shows when more than one plate is actually in play — a
 /// single selected plate (whether because the job only has one, or
-/// because `--plate N` picked one out) is the "omit entirely" case from
-/// SPEC.md §7, same rule `material breakdown`/`hardware breakdown` follow.
+/// because `--plate N` picked one out) is the "omit entirely" case, same
+/// rule `material breakdown`/`hardware breakdown` follow.
 fn print_receipt(b: &CostBreakdown) {
     let color = std::io::stdout().is_terminal();
 
@@ -343,7 +341,7 @@ fn print_receipt(b: &CostBreakdown) {
 }
 
 /// `label` + dotted leader (to `width`) + `trailing`, uncolored — used for
-/// the plates section, which isn't part of SPEC.md §7's cost color scheme.
+/// the plates section, which isn't part of the cost color scheme.
 fn print_dotted(label: &str, trailing: &str, width: usize) {
     let dots = ".".repeat(width.saturating_sub(label.len()));
     println!("  {label}{dots} {trailing}");
@@ -361,7 +359,7 @@ fn print_item_line(label: &str, detail: &str, cost: f64, width: usize, code: &st
     println!("{}", paint(&format!("  {label}{dots} {detail} = ${cost:.2}"), code, color));
 }
 
-/// "17m17s" / "1h05m17s" style, matching SPEC.md §7's plate mockup.
+/// "17m17s" / "1h05m17s" style.
 fn format_duration(seconds: f64) -> String {
     let total = seconds.round() as i64;
     let h = total / 3600;

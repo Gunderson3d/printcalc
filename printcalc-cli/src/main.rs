@@ -1,5 +1,5 @@
 //! `printcalc` CLI. Arg parsing, interactive prompts, and terminal output
-//! only — all real logic lives in `printcalc_lib::ops`. See `SPEC.md` §1, §7.
+//! only — all real logic lives in `printcalc_lib::ops`.
 //!
 //! `printcalc <file> [flags]` is the primary action (cost a sliced file, or
 //! calc an existing job `.toml`) — `printer`/`filament` are subcommands for

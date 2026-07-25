@@ -4,7 +4,7 @@
 //! [g] = 3.10`, `; filament_type = PLA`). Confirmed against
 //! `Testfiles/Cube_0.2mm_PLA_Prusa MINI_20m7s.gcode`. Shares the key=value
 //! line parsing and `SliceSummary` building in [`super::prusa_metadata`]
-//! with [`super::prusa_bgcode`]. See `SPEC.md` §4.
+//! with [`super::prusa_bgcode`].
 
 use super::slice_summary::{SliceSummary, SourceFormat};
 use super::{prusa_metadata, ParseError, SliceParser};
@@ -30,7 +30,7 @@ impl SliceParser for PrusaGcode {
 }
 
 /// Content-sniff fallback for a renamed file: not a zip (3MF/sl1), not a
-/// `.bgcode` (`GCDE` magic), and decodes as UTF-8 text. See `SPEC.md` §4.
+/// `.bgcode` (`GCDE` magic), and decodes as UTF-8 text.
 fn looks_like_plain_gcode(bytes: &[u8]) -> bool {
     !bytes.starts_with(b"PK\x03\x04") && !bytes.starts_with(b"GCDE") && std::str::from_utf8(bytes).is_ok()
 }
@@ -80,7 +80,7 @@ mod tests {
     /// of more, unused ones are 0.00), so this is the milestone-6
     /// comma-list path even though only one slot ends up nonzero. slot_id
     /// is therefore the 0-based list position ("0"), not the scalar-case
-    /// "1" — a real, spec-intended asymmetry (SPEC.md §4/§9 milestone 6).
+    /// "1" — a real, intended asymmetry.
     #[test]
     fn parses_core_one_idex_single_extruder_fixture() {
         let bytes = read_test_file("Shape-Box_0.4n_0.2mm_PLA_COREONEINDX_19m.gcode");

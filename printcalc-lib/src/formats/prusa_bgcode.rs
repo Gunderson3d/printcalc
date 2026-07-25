@@ -10,7 +10,7 @@
 //! around `=` — [`super::prusa_metadata::parse_lines`] handles both shapes
 //! already (it only trims and splits on `=`). See [`super::prusa_metadata`]
 //! for the shared key=value parsing used by both this and
-//! [`super::prusa_gcode`]. See `SPEC.md` §4.
+//! [`super::prusa_gcode`].
 
 use binarygcode::{BlockKind, DeserialisedResult, Deserialiser};
 

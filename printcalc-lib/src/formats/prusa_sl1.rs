@@ -6,7 +6,6 @@
 //!
 //! Single plate, single vat: no multi-material concept for resin, so
 //! `filament_usage` always has exactly one entry, `slot_id` always `"1"`.
-//! See `SPEC.md` §4.
 
 use std::collections::HashMap;
 use std::io::{Cursor, Read, Seek};

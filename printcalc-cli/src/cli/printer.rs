@@ -1,5 +1,5 @@
 //! `printcalc printer add/list/show` — arg parsing + printing only; calls
-//! `printcalc_lib::ops::*`. See `SPEC.md` §7.
+//! `printcalc_lib::ops::*`.
 //!
 //! `add` is interactive by default: any field not passed as a flag gets
 //! prompted for, unless the top-level `--no-input` was given (see

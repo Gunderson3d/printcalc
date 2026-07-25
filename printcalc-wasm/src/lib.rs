@@ -1,7 +1,7 @@
 //! WASM bindings over `printcalc_lib::ops` for in-browser use. Thin
-//! `wasm-bindgen` wrapper only — no business logic of its own. `SPEC.md`
-//! §8 spells these as returning `JsValue`; they return a JSON `String`
-//! instead (`JSON.parse()` it on the JS side) — same "SliceSummary/
+//! `wasm-bindgen` wrapper only — no business logic of its own. These
+//! functions return a JSON `String` rather than a `JsValue`
+//! (`JSON.parse()` it on the JS side) — same "SliceSummary/
 //! CostBreakdown as JSON" contract, without needing `serde-wasm-bindgen`
 //! (not otherwise a dependency anywhere in this workspace) just to hand
 //! back a native JS object instead of a string.
@@ -9,8 +9,8 @@
 //! No filesystem here — the host page owns file input, profile
 //! persistence (e.g. `localStorage`), and rendering; `calc_job` only
 //! works on a job whose printer/filament refs and source are already
-//! embedded (Full/Bundled tier, `SPEC.md` §5), since there's no library
-//! to resolve a `Linked` ref against. See `SPEC.md` §1, §6, §8.
+//! embedded (Full/Bundled tier), since there's no library to resolve a
+//! `Linked` ref against.
 
 use wasm_bindgen::prelude::*;
 
