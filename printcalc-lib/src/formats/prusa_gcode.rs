@@ -72,4 +72,38 @@ mod tests {
         assert_eq!(usage.ml, None);
         assert_eq!(usage.material_type.as_deref(), Some("PLA"));
     }
+
+    /// Core One IDEX, sliced single-extruder: `filament used [g]` is still
+    /// comma-shaped (`"2.82, 0.00, ..."`, 8 slots — the printer's capable
+    /// of more, unused ones are 0.00), so this is the milestone-6
+    /// comma-list path even though only one slot ends up nonzero. slot_id
+    /// is therefore the 0-based list position ("0"), not the scalar-case
+    /// "1" — a real, spec-intended asymmetry (SPEC.md §4/§9 milestone 6).
+    #[test]
+    fn parses_core_one_idex_single_extruder_fixture() {
+        let bytes = read_test_file("Shape-Box_0.4n_0.2mm_PLA_COREONEINDX_19m.gcode");
+        let summary = PrusaGcode::parse(&bytes).unwrap();
+        let plate = &summary.plates[0];
+        assert_eq!(plate.printer_model.as_deref(), Some("COREONE_INDX8T"));
+        assert_eq!(plate.filament_usage.len(), 1);
+        let usage = &plate.filament_usage[0];
+        assert_eq!(usage.slot_id, "0");
+        assert!((usage.grams.unwrap() - 2.82).abs() < 1e-9);
+        assert_eq!(usage.material_type.as_deref(), Some("PLA"));
+        assert_eq!(usage.color.as_deref(), Some("#FF8000"));
+    }
+
+    /// Same model, dual-extruder slice of the same part: two nonzero
+    /// entries, slot_id "0" and "1".
+    #[test]
+    fn parses_core_one_idex_dual_extruder_fixture() {
+        let bytes = read_test_file("Shape-Box_0.4n_0.2mm_PLA,PLA_COREONEINDX_19m.gcode");
+        let summary = PrusaGcode::parse(&bytes).unwrap();
+        let plate = &summary.plates[0];
+        assert_eq!(plate.filament_usage.len(), 2);
+        assert_eq!(plate.filament_usage[0].slot_id, "0");
+        assert!((plate.filament_usage[0].grams.unwrap() - 1.38).abs() < 1e-9);
+        assert_eq!(plate.filament_usage[1].slot_id, "1");
+        assert!((plate.filament_usage[1].grams.unwrap() - 1.47).abs() < 1e-9);
+    }
 }

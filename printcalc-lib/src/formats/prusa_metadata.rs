@@ -41,10 +41,17 @@ pub fn parse_lines<'a>(lines: impl Iterator<Item = &'a str>) -> HashMap<String, 
         .collect()
 }
 
-/// Builds a single-plate, single-slot `SliceSummary` from a parsed
-/// metadata map — the shape both `.gcode` and `.bgcode` produce on a
-/// single-extruder print. Multi-extruder (comma-separated `filament used
-/// [g]` etc.) lands with milestone 6.
+/// Builds a single-plate `SliceSummary` from a parsed metadata map.
+///
+/// `filament used [g]` is either a plain scalar (single-extruder print —
+/// one `FilamentUsage`, `slot_id` normalized to `"1"` to line up with
+/// Bambu's single-tray convention and the `--filament`/`[filament]` sugar,
+/// `SPEC.md` §5 §7) or a comma-separated list, one value per extruder slot
+/// on a multi-extruder printer (XL, Core One IDEX) — one `FilamentUsage`
+/// per nonzero entry, `slot_id` = its 0-based position in the list.
+/// `filament_type`/`filament_colour` follow the same shape, just
+/// semicolon- instead of comma-separated (PrusaSlicer's own inconsistency,
+/// not ours).
 pub fn build_slice_summary(
     metadata: &HashMap<String, String>,
     source_format: SourceFormat,
@@ -58,25 +65,56 @@ pub fn build_slice_summary(
         .and_then(|s| parse_duration(s).ok_or_else(|| ParseError::InvalidField(TIME_KEY, s.clone())))?;
 
     let grams_raw = metadata.get(GRAMS_KEY).ok_or(ParseError::MissingField(GRAMS_KEY))?;
-    let grams: f64 = grams_raw.parse().map_err(|_| ParseError::InvalidField(GRAMS_KEY, grams_raw.clone()))?;
+    let filament_usage = if grams_raw.contains(',') {
+        let types = split_list(metadata.get("filament_type"));
+        let colours = split_list(metadata.get("filament_colour"));
+        let mut usage = Vec::new();
+        for (i, raw) in grams_raw.split(',').enumerate() {
+            let grams: f64 =
+                raw.trim().parse().map_err(|_| ParseError::InvalidField(GRAMS_KEY, grams_raw.clone()))?;
+            if grams == 0.0 {
+                continue; // extruder slot not used on this print
+            }
+            usage.push(FilamentUsage {
+                slot_id: i.to_string(),
+                material_type: types.get(i).filter(|s| !s.is_empty()).cloned(),
+                color: colours.get(i).filter(|s| !s.is_empty()).cloned(),
+                grams: Some(grams),
+                ml: None,
+            });
+        }
+        usage
+    } else {
+        let grams: f64 = grams_raw.parse().map_err(|_| ParseError::InvalidField(GRAMS_KEY, grams_raw.clone()))?;
+        vec![FilamentUsage {
+            slot_id: "1".to_string(),
+            material_type: metadata.get("filament_type").cloned(),
+            color: None,
+            grams: Some(grams),
+            ml: None,
+        }]
+    };
 
     Ok(SliceSummary {
         source_format,
         plates: vec![PlateSummary {
             plate_index: 1,
             print_time_seconds,
-            filament_usage: vec![FilamentUsage {
-                slot_id: "1".to_string(),
-                material_type: metadata.get("filament_type").cloned(),
-                color: None,
-                grams: Some(grams),
-                ml: None,
-            }],
+            filament_usage,
             printer_model: metadata.get("printer_model").cloned(),
             layer_height: metadata.get("layer_height").and_then(|s| s.parse::<f64>().ok()),
             extra: HashMap::new(),
         }],
     })
+}
+
+/// `"PLA;PLA;PETG"` -> `["PLA", "PLA", "PETG"]`, trimmed, positions kept
+/// intact (an empty entry stays as `""` rather than shifting later
+/// positions) so `.get(i)` lines up with `filament used [g]`'s `i`.
+/// `None` input (key absent) is just an empty list — every `.get(i)` then
+/// yields `None`.
+fn split_list(value: Option<&String>) -> Vec<String> {
+    value.map(|s| s.split(';').map(|part| part.trim().to_string()).collect()).unwrap_or_default()
 }
 
 /// "20m 7s" / "1h 5m 30s" style duration, as emitted after the

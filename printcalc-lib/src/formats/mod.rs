@@ -83,6 +83,10 @@ pub fn parse_slice_file(bytes: &[u8], filename: &str) -> Result<SliceSummary, Pa
     if prusa_sl1::PrusaSl1::detect(bytes, filename) {
         return prusa_sl1::PrusaSl1::parse(bytes);
     }
+    #[cfg(feature = "prusa-bgcode")]
+    if prusa_bgcode::PrusaBgcode::detect(bytes, filename) {
+        return prusa_bgcode::PrusaBgcode::parse(bytes);
+    }
     #[cfg(feature = "prusa-gcode")]
     if prusa_gcode::PrusaGcode::detect(bytes, filename) {
         return prusa_gcode::PrusaGcode::parse(bytes);
