@@ -31,6 +31,10 @@ struct Cli {
     printer: Option<String>,
     #[arg(short = 'f', long)]
     filament: Option<String>,
+    /// One filament per AMS tray/extruder: `slot=name,slot=name,...`.
+    /// Mutually exclusive with --filament.
+    #[arg(long = "filament-map")]
+    filament_map: Option<String>,
     /// Save the job here. Without this, nothing is written — the cost is
     /// just computed and shown.
     #[arg(short, long)]
@@ -76,6 +80,7 @@ fn main() {
                 name: cli.name,
                 printer: cli.printer,
                 filament: cli.filament,
+                filament_map: cli.filament_map,
                 output: cli.output,
                 job_type: cli.job_type,
                 plate: cli.plate,

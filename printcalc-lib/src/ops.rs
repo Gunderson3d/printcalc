@@ -15,7 +15,7 @@ use crate::formats::{self, ParseError};
 use crate::library::{self, LibraryError};
 use crate::model::cost::{self, CalcError, CostBreakdown};
 use crate::model::filament::FilamentProfile;
-use crate::model::job::{Job, JobSource, LaborCost, ProfileRef, SINGLE_FILAMENT_SLOT};
+use crate::model::job::{Job, JobSource, LaborCost, ProfileRef};
 use crate::model::printer::PrinterProfile;
 
 #[derive(Debug)]
@@ -111,7 +111,13 @@ pub struct NewJobParams {
     pub name: String,
     pub slice_path: PathBuf,
     pub printer_name: String,
-    pub filament_name: String,
+    /// slot_id -> filament profile name. The common single-material case
+    /// is just a one-entry map — building that one entry under the right
+    /// slot_id (not always `"1"`, see
+    /// [`SliceSummary::distinct_filament_slots`](crate::formats::slice_summary::SliceSummary::distinct_filament_slots))
+    /// is the caller's job, same as `[filament]` vs `[filaments]` is just
+    /// two TOML shapes for the same underlying map (`SPEC.md` §2, §5).
+    pub filament_names: HashMap<String, String>,
     pub plate_selection: Option<u32>,
     pub labor_minutes: f64,
     pub labor_rate_per_hour: Option<f64>,
@@ -161,16 +167,25 @@ pub fn new_job_from_slice(params: NewJobParams, summary: SliceSummary) -> Result
     let plate_selection_ignored = params.plate_selection.is_some() && summary.plates.len() <= 1;
     let plate_selection = if plate_selection_ignored { None } else { params.plate_selection };
 
-    let (printer, filament) = match params.tier {
-        JobTier::Default => (
-            ProfileRef::Linked { name: params.printer_name },
-            ProfileRef::Linked { name: params.filament_name },
-        ),
-        JobTier::Full | JobTier::Bundled => (
-            ProfileRef::Embedded { profile: Box::new(library::load_printer(&params.printer_name)?) },
-            ProfileRef::Embedded { profile: Box::new(library::load_filament(&params.filament_name)?) },
-        ),
+    let printer = match params.tier {
+        JobTier::Default => ProfileRef::Linked { name: params.printer_name },
+        JobTier::Full | JobTier::Bundled => {
+            ProfileRef::Embedded { profile: Box::new(library::load_printer(&params.printer_name)?) }
+        }
     };
+    let filament: HashMap<String, ProfileRef<FilamentProfile>> = params
+        .filament_names
+        .into_iter()
+        .map(|(slot, name)| {
+            let profile_ref = match params.tier {
+                JobTier::Default => ProfileRef::Linked { name },
+                JobTier::Full | JobTier::Bundled => {
+                    ProfileRef::Embedded { profile: Box::new(library::load_filament(&name)?) }
+                }
+            };
+            Ok((slot, profile_ref))
+        })
+        .collect::<Result<_, OpsError>>()?;
     let source = match params.tier {
         JobTier::Bundled => JobSource::Embedded(summary.clone()),
         JobTier::Default | JobTier::Full => JobSource::Path(params.slice_path),
@@ -181,7 +196,7 @@ pub fn new_job_from_slice(params: NewJobParams, summary: SliceSummary) -> Result
         source,
         plate_selection,
         printer,
-        filament: HashMap::from([(SINGLE_FILAMENT_SLOT.to_string(), filament)]),
+        filament,
         material_efficiency_factor_override: None,
         electricity_cost_per_kwh_override: None,
         labor: LaborCost { rate_per_hour: params.labor_rate_per_hour, minutes: params.labor_minutes },
@@ -273,7 +288,7 @@ mod tests {
     use super::*;
     use crate::formats::slice_summary::{FilamentUsage, PlateSummary, SourceFormat};
     use crate::model::filament::MaterialKind;
-    use crate::model::job::HardwareItem;
+    use crate::model::job::{HardwareItem, SINGLE_FILAMENT_SLOT};
     use crate::model::printer::{PrinterKind, WearProfile};
 
     fn sl1_fixture_path() -> PathBuf {
@@ -320,7 +335,7 @@ mod tests {
             name: "test-print".into(),
             slice_path: sl1_fixture_path(),
             printer_name: "sl1-printer".into(),
-            filament_name: "resin-grey".into(),
+            filament_names: HashMap::from([(SINGLE_FILAMENT_SLOT.to_string(), "resin-grey".to_string())]),
             plate_selection: None,
             labor_minutes: 10.0,
             labor_rate_per_hour: None,
@@ -349,7 +364,7 @@ mod tests {
             name: "test-print".into(),
             slice_path: sl1_fixture_path(),
             printer_name: "sl1-printer".into(),
-            filament_name: "resin-grey".into(),
+            filament_names: HashMap::from([(SINGLE_FILAMENT_SLOT.to_string(), "resin-grey".to_string())]),
             plate_selection: Some(2),
             labor_minutes: 0.0,
             labor_rate_per_hour: None,
@@ -485,7 +500,7 @@ mod tests {
             name: "test-print".into(),
             slice_path: sl1_fixture_path(),
             printer_name: "sl1-printer".into(),
-            filament_name: "resin-grey".into(),
+            filament_names: HashMap::from([(SINGLE_FILAMENT_SLOT.to_string(), "resin-grey".to_string())]),
             plate_selection: None,
             labor_minutes: 6.0,
             labor_rate_per_hour: None,

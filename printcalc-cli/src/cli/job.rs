@@ -3,10 +3,8 @@
 //! straight here. A `.toml` path calcs an existing job; anything else is
 //! parsed as a sliced file and turned into one. Arg parsing + printing
 //! only — all real logic is `printcalc_lib::ops::*`. See `SPEC.md` §7.
-//!
-//! `--filament-map` (multi-slot) lands with milestone 7; against the
-//! `prusa-sl1` parser alone there's only ever one filament slot.
 
+use std::collections::HashMap;
 use std::error::Error;
 use std::io::IsTerminal;
 use std::path::PathBuf;
@@ -49,7 +47,13 @@ pub struct JobInvocation {
     /// baked into the file).
     pub name: Option<String>,
     pub printer: Option<String>,
+    /// One filament for the whole job — mutually exclusive with
+    /// `filament_map`. Only valid when the print has (at most) one real
+    /// filament slot.
     pub filament: Option<String>,
+    /// `slot=name,slot=name,...` — one filament per AMS tray / extruder.
+    /// Mutually exclusive with `filament`.
+    pub filament_map: Option<String>,
     pub output: Option<PathBuf>,
     pub job_type: JobType,
     /// "all" (default) or a plate number; ignored with a warning for
@@ -90,13 +94,7 @@ fn new_job_flow(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
         inv.interactive,
         &ops::list_printers().unwrap_or_default(),
     )?;
-    let filament_name = interactive::require_choice(
-        inv.filament,
-        "filament",
-        "Filament profile name",
-        inv.interactive,
-        &ops::list_filaments().unwrap_or_default(),
-    )?;
+    let filament_names = resolve_filament_names(&slice, inv.filament, inv.filament_map, inv.interactive)?;
     // No prompt: unlike printer/filament, omitting this just means no
     // labor cost rather than something that needs asking about.
     let labor_minutes = inv.labor_minutes.unwrap_or(0.0);
@@ -121,7 +119,7 @@ fn new_job_flow(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
             name,
             slice_path: inv.file.clone(),
             printer_name,
-            filament_name,
+            filament_names,
             plate_selection,
             labor_minutes,
             labor_rate_per_hour: labor_rate,
@@ -161,6 +159,81 @@ fn parse_plate_override(plate: Option<&str>) -> Result<Option<Option<u32>>, Box<
         None => Ok(None),
         Some(_) => parse_plate(plate).map(Some),
     }
+}
+
+/// Builds the slot_id -> filament name map for a new job. See `SPEC.md`
+/// §7: `--filament` (one profile for the whole job) and `--filament-map`
+/// (`slot=name` pairs) are mutually exclusive, both just two ways to
+/// write the same underlying map. When neither is given, `--interactive`
+/// only prompts per-slot if the slice actually has more than one nonzero
+/// `FilamentUsage` — a single-material file still gets one plain prompt.
+fn resolve_filament_names(
+    slice: &printcalc_lib::formats::slice_summary::SliceSummary,
+    filament: Option<String>,
+    filament_map: Option<String>,
+    interactive_mode: bool,
+) -> Result<HashMap<String, String>, Box<dyn Error>> {
+    if filament.is_some() && filament_map.is_some() {
+        return Err("--filament and --filament-map are mutually exclusive".into());
+    }
+
+    let distinct_slots = slice.distinct_filament_slots();
+    let multi_slot = distinct_slots.len() > 1;
+
+    if multi_slot && filament.is_some() {
+        return Err(format!(
+            "this print uses multiple filament slots ({}) — use --filament-map slot=name,... instead of --filament",
+            distinct_slots.join(", ")
+        )
+        .into());
+    }
+
+    if let Some(map_str) = filament_map {
+        return parse_filament_map(&map_str);
+    }
+    if multi_slot {
+        return prompt_filament_map(&distinct_slots, interactive_mode);
+    }
+
+    let slot = distinct_slots.into_iter().next().unwrap_or_else(|| "1".to_string());
+    let name = interactive::require_choice(
+        filament,
+        "filament",
+        "Filament profile name",
+        interactive_mode,
+        &ops::list_filaments().unwrap_or_default(),
+    )?;
+    Ok(HashMap::from([(slot, name)]))
+}
+
+fn parse_filament_map(s: &str) -> Result<HashMap<String, String>, Box<dyn Error>> {
+    s.split(',')
+        .map(|pair| {
+            let (slot, name) = pair
+                .split_once('=')
+                .ok_or_else(|| format!("invalid --filament-map entry {pair:?}, expected slot=name"))?;
+            Ok((slot.trim().to_string(), name.trim().to_string()))
+        })
+        .collect()
+}
+
+fn prompt_filament_map(slots: &[String], interactive_mode: bool) -> Result<HashMap<String, String>, Box<dyn Error>> {
+    if !interactive_mode {
+        return Err(format!(
+            "this print uses multiple filament slots ({}) — pass --filament-map slot=name,... (rerun without --no-input to be prompted per slot)",
+            slots.join(", ")
+        )
+        .into());
+    }
+    let choices = ops::list_filaments().unwrap_or_default();
+    slots
+        .iter()
+        .map(|slot| {
+            let label = format!("Filament profile for slot {slot}");
+            let name = interactive::require_choice(None, "filament-map", &label, true, &choices)?;
+            Ok((slot.clone(), name))
+        })
+        .collect()
 }
 
 fn print_result(breakdown: &CostBreakdown, format: OutputFormat) {
