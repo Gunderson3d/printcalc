@@ -122,7 +122,10 @@ fn load_profile<T: DeserializeOwned>(
     let path = dir.join(format!("{name}.toml"));
     let text = fs::read_to_string(&path).map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
-            LibraryError::NotFound { kind, name: name.to_string() }
+            LibraryError::NotFound {
+                kind,
+                name: name.to_string(),
+            }
         } else {
             LibraryError::Io(e)
         }

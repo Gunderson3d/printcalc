@@ -18,7 +18,11 @@ use cli::job::{JobInvocation, JobType, OutputFormat};
 use cli::printer::PrinterArgs;
 
 #[derive(Parser)]
-#[command(name = "printcalc", version, about = "Calculate 3D print job costs from sliced-file output.")]
+#[command(
+    name = "printcalc",
+    version,
+    about = "Calculate 3D print job costs from sliced-file output."
+)]
 struct Cli {
     /// Sliced file to cost, or an existing job .toml to calc.
     file: Option<PathBuf>,

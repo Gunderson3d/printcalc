@@ -71,7 +71,9 @@ pub struct JobInvocation {
 pub fn run(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
     if inv.file.extension().and_then(|e| e.to_str()) == Some("toml") {
         if let Some(job_type) = inv.retier {
-            let output = inv.output.ok_or("--retier needs -o/--output to save the re-tiered job to")?;
+            let output = inv
+                .output
+                .ok_or("--retier needs -o/--output to save the re-tiered job to")?;
             let retiered = ops::retier_job(&inv.file, job_type.into())?;
             ops::save_job(&retiered, &output)?;
             println!("wrote {}", output.display());
@@ -103,7 +105,8 @@ fn new_job_flow(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
         inv.interactive,
         &ops::list_printers().unwrap_or_default(),
     )?;
-    let filament_names = resolve_filament_names(&slice, inv.filament, inv.filament_map, inv.interactive)?;
+    let filament_names =
+        resolve_filament_names(&slice, inv.filament, inv.filament_map, inv.interactive)?;
     // No prompt: unlike printer/filament, omitting this just means no
     // labor cost rather than something that needs asking about.
     let labor_minutes = inv.labor_minutes.unwrap_or(0.0);
@@ -156,7 +159,10 @@ fn new_job_flow(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
 fn parse_plate(plate: Option<&str>) -> Result<Option<u32>, Box<dyn Error>> {
     match plate {
         None | Some("all") => Ok(None),
-        Some(s) => s.parse::<u32>().map(Some).map_err(|_| format!("invalid --plate value: {s:?}").into()),
+        Some(s) => s
+            .parse::<u32>()
+            .map(Some)
+            .map_err(|_| format!("invalid --plate value: {s:?}").into()),
     }
 }
 
@@ -204,7 +210,10 @@ fn resolve_filament_names(
         return prompt_filament_map(&distinct_slots, interactive_mode);
     }
 
-    let slot = distinct_slots.into_iter().next().unwrap_or_else(|| "1".to_string());
+    let slot = distinct_slots
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| "1".to_string());
     let name = interactive::require_choice(
         filament,
         "filament",
@@ -218,15 +227,18 @@ fn resolve_filament_names(
 fn parse_filament_map(s: &str) -> Result<HashMap<String, String>, Box<dyn Error>> {
     s.split(',')
         .map(|pair| {
-            let (slot, name) = pair
-                .split_once('=')
-                .ok_or_else(|| format!("invalid --filament-map entry {pair:?}, expected slot=name"))?;
+            let (slot, name) = pair.split_once('=').ok_or_else(|| {
+                format!("invalid --filament-map entry {pair:?}, expected slot=name")
+            })?;
             Ok((slot.trim().to_string(), name.trim().to_string()))
         })
         .collect()
 }
 
-fn prompt_filament_map(slots: &[String], interactive_mode: bool) -> Result<HashMap<String, String>, Box<dyn Error>> {
+fn prompt_filament_map(
+    slots: &[String],
+    interactive_mode: bool,
+) -> Result<HashMap<String, String>, Box<dyn Error>> {
     if !interactive_mode {
         return Err(format!(
             "this print uses multiple filament slots ({}) — pass --filament-map slot=name,... (rerun without --no-input to be prompted per slot)",
@@ -248,7 +260,10 @@ fn prompt_filament_map(slots: &[String], interactive_mode: bool) -> Result<HashM
 fn print_result(breakdown: &CostBreakdown, format: OutputFormat) {
     match format {
         OutputFormat::Table => print_receipt(breakdown),
-        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(breakdown).expect("CostBreakdown always serializes")),
+        OutputFormat::Json => println!(
+            "{}",
+            serde_json::to_string_pretty(breakdown).expect("CostBreakdown always serializes")
+        ),
     }
 }
 
@@ -268,7 +283,14 @@ const RESET: &str = "\x1b[0m";
 fn print_receipt(b: &CostBreakdown) {
     let color = std::io::stdout().is_terminal();
 
-    let cost_labels = ["Material", "Printer wear", "Electricity", "Labor", "Hardware", "TOTAL"];
+    let cost_labels = [
+        "Material",
+        "Printer wear",
+        "Electricity",
+        "Labor",
+        "Hardware",
+        "TOTAL",
+    ];
     let plate_labels = ["Combined".to_string()];
     let width = b
         .plate_breakdown
@@ -287,14 +309,22 @@ fn print_receipt(b: &CostBreakdown) {
         println!("plates");
         for p in &b.plate_breakdown {
             let label = format!("Plate {}", p.plate_index);
-            let detail = format!("{} · {}", format_duration(p.print_time_seconds), format_amount(p.grams, p.ml));
+            let detail = format!(
+                "{} · {}",
+                format_duration(p.print_time_seconds),
+                format_amount(p.grams, p.ml)
+            );
             print_dotted(&label, &detail, width);
         }
         let combined_seconds: f64 = b.plate_breakdown.iter().map(|p| p.print_time_seconds).sum();
         let combined_grams: f64 = b.plate_breakdown.iter().map(|p| p.grams).sum();
         let combined_ml: f64 = b.plate_breakdown.iter().map(|p| p.ml).sum();
         println!("  {}", "─".repeat(width + 3));
-        let detail = format!("{} · {}", format_duration(combined_seconds), format_amount(combined_grams, combined_ml));
+        let detail = format!(
+            "{} · {}",
+            format_duration(combined_seconds),
+            format_amount(combined_grams, combined_ml)
+        );
         print_dotted("Combined", &detail, width);
         println!();
     }
@@ -303,7 +333,10 @@ fn print_receipt(b: &CostBreakdown) {
         println!("material breakdown");
         for line in &b.material_breakdown {
             let price_unit = if line.unit == "g" { "kg" } else { "L" };
-            let detail = format!("{:.2}{} @ ${:.2}/{}", line.amount, line.unit, line.unit_price, price_unit);
+            let detail = format!(
+                "{:.2}{} @ ${:.2}/{}",
+                line.amount, line.unit, line.unit_price, price_unit
+            );
             print_item_line(&line.filament_name, &detail, line.cost, width, CYAN, color);
         }
         println!();
@@ -328,12 +361,24 @@ fn print_receipt(b: &CostBreakdown) {
     print_cost_line("TOTAL", b.total_cost, width, BOLD_GREEN, color);
     println!();
 
-    let markups: Vec<String> = b.suggested_prices.iter().map(|p| format!("{:.0}%", p.markup_percent)).collect();
-    let prices: Vec<String> = b.suggested_prices.iter().map(|p| format!("${:.2}", p.price)).collect();
+    let markups: Vec<String> = b
+        .suggested_prices
+        .iter()
+        .map(|p| format!("{:.0}%", p.markup_percent))
+        .collect();
+    let prices: Vec<String> = b
+        .suggested_prices
+        .iter()
+        .map(|p| format!("${:.2}", p.price))
+        .collect();
     println!(
         "{}",
         paint(
-            &format!("  sale price @ {}:  {}", markups.join(" / "), prices.join("  ")),
+            &format!(
+                "  sale price @ {}:  {}",
+                markups.join(" / "),
+                prices.join("  ")
+            ),
             BOLD_GREEN,
             color
         )
@@ -349,14 +394,24 @@ fn print_dotted(label: &str, trailing: &str, width: usize) {
 
 fn print_cost_line(label: &str, value: f64, width: usize, code: &str, color: bool) {
     let dots = ".".repeat(width.saturating_sub(label.len()));
-    println!("{}", paint(&format!("  {label}{dots} ${value:.2}"), code, color));
+    println!(
+        "{}",
+        paint(&format!("  {label}{dots} ${value:.2}"), code, color)
+    );
 }
 
 /// A breakdown row: `label` + dotted leader + `detail` (the "amount @
 /// price" part) + ` = $cost`.
 fn print_item_line(label: &str, detail: &str, cost: f64, width: usize, code: &str, color: bool) {
     let dots = ".".repeat(width.saturating_sub(label.len()));
-    println!("{}", paint(&format!("  {label}{dots} {detail} = ${cost:.2}"), code, color));
+    println!(
+        "{}",
+        paint(
+            &format!("  {label}{dots} {detail} = ${cost:.2}"),
+            code,
+            color
+        )
+    );
 }
 
 /// "17m17s" / "1h05m17s" style.
@@ -365,7 +420,11 @@ fn format_duration(seconds: f64) -> String {
     let h = total / 3600;
     let m = (total % 3600) / 60;
     let s = total % 60;
-    if h > 0 { format!("{h}h{m:02}m{s:02}s") } else { format!("{m}m{s:02}s") }
+    if h > 0 {
+        format!("{h}h{m:02}m{s:02}s")
+    } else {
+        format!("{m}m{s:02}s")
+    }
 }
 
 /// "6.66g", "2.60ml", or "6.66g + 2.60ml" if a plate somehow has both
@@ -380,5 +439,9 @@ fn format_amount(grams: f64, ml: f64) -> String {
 }
 
 fn paint(text: &str, code: &str, enabled: bool) -> String {
-    if enabled { format!("{code}{text}{RESET}") } else { text.to_string() }
+    if enabled {
+        format!("{code}{text}{RESET}")
+    } else {
+        text.to_string()
+    }
 }

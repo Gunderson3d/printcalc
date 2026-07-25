@@ -67,7 +67,11 @@ pub fn run(cmd: PrinterCommand, interactive_mode: bool) -> Result<(), Box<dyn Er
             let kind = match kind.as_str() {
                 "fdm" => PrinterKind::Fdm,
                 "resin" => PrinterKind::Resin,
-                other => return Err(format!("invalid --kind {other:?} (expected \"fdm\" or \"resin\")").into()),
+                other => {
+                    return Err(
+                        format!("invalid --kind {other:?} (expected \"fdm\" or \"resin\")").into(),
+                    )
+                }
             };
             let purchase_price = interactive::require_f64(
                 purchase_price,
@@ -141,10 +145,22 @@ fn print_printer(p: &PrinterProfile) {
     println!("name: {}", p.name);
     println!("kind: {:?}", p.kind);
     println!("purchase_price: {}", p.wear.purchase_price);
-    println!("additional_upfront_cost: {}", p.wear.additional_upfront_cost);
+    println!(
+        "additional_upfront_cost: {}",
+        p.wear.additional_upfront_cost
+    );
     println!("estimated_life_years: {}", p.wear.estimated_life_years);
-    println!("estimated_uptime_percent: {}", p.wear.estimated_uptime_percent);
-    println!("annual_maintenance_cost: {}", p.wear.annual_maintenance_cost);
-    println!("power_consumption_watts: {}", p.wear.power_consumption_watts);
+    println!(
+        "estimated_uptime_percent: {}",
+        p.wear.estimated_uptime_percent
+    );
+    println!(
+        "annual_maintenance_cost: {}",
+        p.wear.annual_maintenance_cost
+    );
+    println!(
+        "power_consumption_watts: {}",
+        p.wear.power_consumption_watts
+    );
     println!("cost_buffer_factor: {}", p.wear.cost_buffer_factor);
 }

@@ -32,10 +32,15 @@ impl SliceParser for Bambu3mf {
         let printer_model = read_printer_model(&mut archive);
 
         let mut slice_info = String::new();
-        archive.by_name("Metadata/slice_info.config")?.read_to_string(&mut slice_info)?;
+        archive
+            .by_name("Metadata/slice_info.config")?
+            .read_to_string(&mut slice_info)?;
         let plates = parse_slice_info(&slice_info, printer_model.as_deref())?;
 
-        Ok(SliceSummary { source_format: SourceFormat::Bambu3mf, plates })
+        Ok(SliceSummary {
+            source_format: SourceFormat::Bambu3mf,
+            plates,
+        })
     }
 }
 
@@ -58,13 +63,20 @@ fn looks_like_3mf_zip(bytes: &[u8]) -> bool {
 /// label, not required for costing.
 fn read_printer_model<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -> Option<String> {
     let mut text = String::new();
-    archive.by_name("Metadata/project_settings.config").ok()?.read_to_string(&mut text).ok()?;
+    archive
+        .by_name("Metadata/project_settings.config")
+        .ok()?
+        .read_to_string(&mut text)
+        .ok()?;
     let value: serde_json::Value = serde_json::from_str(&text).ok()?;
     value.get("printer_model")?.as_str().map(String::from)
 }
 
 fn attr(attributes: &[OwnedAttribute], name: &str) -> Option<String> {
-    attributes.iter().find(|a| a.name.local_name == name).map(|a| a.value.clone())
+    attributes
+        .iter()
+        .find(|a| a.name.local_name == name)
+        .map(|a| a.value.clone())
 }
 
 /// Walks `<config><plate>...</plate>...</config>`, one [`PlateSummary`] per
@@ -72,7 +84,10 @@ fn attr(attributes: &[OwnedAttribute], name: &str) -> Option<String> {
 /// its `id` attribute, grams = `used_g`). `<metadata key="weight">` is the
 /// slicer's own total and isn't separately stored — it's just the sum of
 /// the `<filament>` elements already captured.
-fn parse_slice_info(xml_text: &str, printer_model: Option<&str>) -> Result<Vec<PlateSummary>, ParseError> {
+fn parse_slice_info(
+    xml_text: &str,
+    printer_model: Option<&str>,
+) -> Result<Vec<PlateSummary>, ParseError> {
     let mut plates = Vec::new();
     let mut in_plate = false;
     let mut plate_index: Option<u32> = None;
@@ -80,9 +95,13 @@ fn parse_slice_info(xml_text: &str, printer_model: Option<&str>) -> Result<Vec<P
     let mut filament_usage: Vec<FilamentUsage> = Vec::new();
 
     for event in EventReader::new(Cursor::new(xml_text.as_bytes())) {
-        let event = event.map_err(|_| ParseError::InvalidField("slice_info.config", "malformed XML".to_string()))?;
+        let event = event.map_err(|_| {
+            ParseError::InvalidField("slice_info.config", "malformed XML".to_string())
+        })?;
         match event {
-            XmlEvent::StartElement { name, attributes, .. } => match name.local_name.as_str() {
+            XmlEvent::StartElement {
+                name, attributes, ..
+            } => match name.local_name.as_str() {
                 "plate" => {
                     in_plate = true;
                     plate_index = None;
@@ -90,7 +109,9 @@ fn parse_slice_info(xml_text: &str, printer_model: Option<&str>) -> Result<Vec<P
                     filament_usage = Vec::new();
                 }
                 "metadata" if in_plate => match attr(&attributes, "key").as_deref() {
-                    Some("index") => plate_index = attr(&attributes, "value").and_then(|v| v.parse().ok()),
+                    Some("index") => {
+                        plate_index = attr(&attributes, "value").and_then(|v| v.parse().ok())
+                    }
                     Some("prediction") => {
                         print_time_seconds = attr(&attributes, "value").and_then(|v| v.parse().ok())
                     }
@@ -109,9 +130,11 @@ fn parse_slice_info(xml_text: &str, printer_model: Option<&str>) -> Result<Vec<P
             },
             XmlEvent::EndElement { name } if name.local_name == "plate" => {
                 in_plate = false;
-                let index = plate_index.ok_or(ParseError::MissingField("slice_info.config: plate index"))?;
-                let seconds =
-                    print_time_seconds.ok_or(ParseError::MissingField("slice_info.config: plate prediction"))?;
+                let index = plate_index
+                    .ok_or(ParseError::MissingField("slice_info.config: plate index"))?;
+                let seconds = print_time_seconds.ok_or(ParseError::MissingField(
+                    "slice_info.config: plate prediction",
+                ))?;
                 plates.push(PlateSummary {
                     plate_index: index,
                     print_time_seconds: seconds,
@@ -126,7 +149,9 @@ fn parse_slice_info(xml_text: &str, printer_model: Option<&str>) -> Result<Vec<P
     }
 
     if plates.is_empty() {
-        return Err(ParseError::MissingField("slice_info.config: no <plate> elements"));
+        return Err(ParseError::MissingField(
+            "slice_info.config: no <plate> elements",
+        ));
     }
     Ok(plates)
 }
@@ -136,7 +161,9 @@ mod tests {
     use super::*;
 
     fn read_test_file(name: &str) -> Vec<u8> {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../Testfiles").join(name);
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../Testfiles")
+            .join(name);
         std::fs::read(path).expect("test fixture missing")
     }
 

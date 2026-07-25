@@ -162,7 +162,9 @@ impl<'de> Deserialize<'de> for Job {
             (Some(path), None) => JobSource::Path(path),
             (None, Some(summary)) => JobSource::Embedded(summary),
             (None, None) => {
-                return Err(D::Error::custom("[source] needs either `path` or `summary`"));
+                return Err(D::Error::custom(
+                    "[source] needs either `path` or `summary`",
+                ));
             }
             (Some(_), Some(_)) => {
                 return Err(D::Error::custom(
@@ -282,16 +284,23 @@ quantity = 4
 "#;
         let job: Job = toml::from_str(toml_str).unwrap();
         assert_eq!(job.name, "widget-v2");
-        assert_eq!(job.source, JobSource::Path("prints/widget.gcode.3mf".into()));
+        assert_eq!(
+            job.source,
+            JobSource::Path("prints/widget.gcode.3mf".into())
+        );
         assert_eq!(job.plate_selection, None);
         assert_eq!(
             job.printer,
-            ProfileRef::Linked { name: "bambu-a1".into() }
+            ProfileRef::Linked {
+                name: "bambu-a1".into()
+            }
         );
         assert_eq!(job.filament.len(), 1);
         assert_eq!(
             job.filament.get(SINGLE_FILAMENT_SLOT),
-            Some(&ProfileRef::Linked { name: "pla-black".into() })
+            Some(&ProfileRef::Linked {
+                name: "pla-black".into()
+            })
         );
         assert_eq!(job.labor.minutes, 10.0);
         assert_eq!(job.hardware.len(), 1);

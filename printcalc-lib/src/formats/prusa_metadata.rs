@@ -62,16 +62,22 @@ pub fn build_slice_summary(
     let print_time_seconds = metadata
         .get(TIME_KEY)
         .ok_or(ParseError::MissingField(TIME_KEY))
-        .and_then(|s| parse_duration(s).ok_or_else(|| ParseError::InvalidField(TIME_KEY, s.clone())))?;
+        .and_then(|s| {
+            parse_duration(s).ok_or_else(|| ParseError::InvalidField(TIME_KEY, s.clone()))
+        })?;
 
-    let grams_raw = metadata.get(GRAMS_KEY).ok_or(ParseError::MissingField(GRAMS_KEY))?;
+    let grams_raw = metadata
+        .get(GRAMS_KEY)
+        .ok_or(ParseError::MissingField(GRAMS_KEY))?;
     let filament_usage = if grams_raw.contains(',') {
         let types = split_list(metadata.get("filament_type"));
         let colours = split_list(metadata.get("filament_colour"));
         let mut usage = Vec::new();
         for (i, raw) in grams_raw.split(',').enumerate() {
-            let grams: f64 =
-                raw.trim().parse().map_err(|_| ParseError::InvalidField(GRAMS_KEY, grams_raw.clone()))?;
+            let grams: f64 = raw
+                .trim()
+                .parse()
+                .map_err(|_| ParseError::InvalidField(GRAMS_KEY, grams_raw.clone()))?;
             if grams == 0.0 {
                 continue; // extruder slot not used on this print
             }
@@ -85,7 +91,9 @@ pub fn build_slice_summary(
         }
         usage
     } else {
-        let grams: f64 = grams_raw.parse().map_err(|_| ParseError::InvalidField(GRAMS_KEY, grams_raw.clone()))?;
+        let grams: f64 = grams_raw
+            .parse()
+            .map_err(|_| ParseError::InvalidField(GRAMS_KEY, grams_raw.clone()))?;
         vec![FilamentUsage {
             slot_id: "1".to_string(),
             material_type: metadata.get("filament_type").cloned(),
@@ -102,7 +110,9 @@ pub fn build_slice_summary(
             print_time_seconds,
             filament_usage,
             printer_model: metadata.get("printer_model").cloned(),
-            layer_height: metadata.get("layer_height").and_then(|s| s.parse::<f64>().ok()),
+            layer_height: metadata
+                .get("layer_height")
+                .and_then(|s| s.parse::<f64>().ok()),
             extra: HashMap::new(),
         }],
     })
@@ -114,7 +124,9 @@ pub fn build_slice_summary(
 /// `None` input (key absent) is just an empty list — every `.get(i)` then
 /// yields `None`.
 fn split_list(value: Option<&String>) -> Vec<String> {
-    value.map(|s| s.split(';').map(|part| part.trim().to_string()).collect()).unwrap_or_default()
+    value
+        .map(|s| s.split(';').map(|part| part.trim().to_string()).collect())
+        .unwrap_or_default()
 }
 
 /// "20m 7s" / "1h 5m 30s" style duration, as emitted after the
@@ -143,10 +155,21 @@ mod tests {
 
     #[test]
     fn parse_lines_builds_a_map_and_skips_junk() {
-        let lines = ["filament used [g] = 3.10", "printer_model = Prusa MINI", "", "no equals here"];
+        let lines = [
+            "filament used [g] = 3.10",
+            "printer_model = Prusa MINI",
+            "",
+            "no equals here",
+        ];
         let map = parse_lines(lines.into_iter());
-        assert_eq!(map.get("filament used [g]").map(String::as_str), Some("3.10"));
-        assert_eq!(map.get("printer_model").map(String::as_str), Some("Prusa MINI"));
+        assert_eq!(
+            map.get("filament used [g]").map(String::as_str),
+            Some("3.10")
+        );
+        assert_eq!(
+            map.get("printer_model").map(String::as_str),
+            Some("Prusa MINI")
+        );
         assert_eq!(map.len(), 2);
     }
 

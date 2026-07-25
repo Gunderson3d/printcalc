@@ -9,9 +9,9 @@ use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::disk::{self, LibraryError};
 use crate::formats::slice_summary::SliceSummary;
 use crate::formats::{self, ParseError};
-use crate::disk::{self, LibraryError};
 use crate::model::cost::{self, CalcError, CostBreakdown};
 use crate::model::filament::FilamentProfile;
 use crate::model::job::{Job, JobSource, LaborCost, ProfileRef};
@@ -183,15 +183,24 @@ pub fn new_job(params: NewJobParams) -> Result<NewJobOutcome, OpsError> {
 /// profiles from the library to embed them (erroring if either isn't
 /// saved yet) — `Default` just links by name, no library access needed
 /// here.
-pub fn new_job_from_slice(params: NewJobParams, summary: SliceSummary) -> Result<NewJobOutcome, OpsError> {
+pub fn new_job_from_slice(
+    params: NewJobParams,
+    summary: SliceSummary,
+) -> Result<NewJobOutcome, OpsError> {
     let plate_selection_ignored = params.plate_selection.is_some() && summary.plates.len() <= 1;
-    let plate_selection = if plate_selection_ignored { None } else { params.plate_selection };
+    let plate_selection = if plate_selection_ignored {
+        None
+    } else {
+        params.plate_selection
+    };
 
     let printer = match params.tier {
-        JobTier::Default => ProfileRef::Linked { name: params.printer_name },
-        JobTier::Full | JobTier::Bundled => {
-            ProfileRef::Embedded { profile: Box::new(disk::load_printer(&params.printer_name)?) }
-        }
+        JobTier::Default => ProfileRef::Linked {
+            name: params.printer_name,
+        },
+        JobTier::Full | JobTier::Bundled => ProfileRef::Embedded {
+            profile: Box::new(disk::load_printer(&params.printer_name)?),
+        },
     };
     let filament: HashMap<String, ProfileRef<FilamentProfile>> = params
         .filament_names
@@ -199,9 +208,9 @@ pub fn new_job_from_slice(params: NewJobParams, summary: SliceSummary) -> Result
         .map(|(slot, name)| {
             let profile_ref = match params.tier {
                 JobTier::Default => ProfileRef::Linked { name },
-                JobTier::Full | JobTier::Bundled => {
-                    ProfileRef::Embedded { profile: Box::new(disk::load_filament(&name)?) }
-                }
+                JobTier::Full | JobTier::Bundled => ProfileRef::Embedded {
+                    profile: Box::new(disk::load_filament(&name)?),
+                },
             };
             Ok((slot, profile_ref))
         })
@@ -219,11 +228,18 @@ pub fn new_job_from_slice(params: NewJobParams, summary: SliceSummary) -> Result
         filament,
         material_efficiency_factor_override: None,
         electricity_cost_per_kwh_override: None,
-        labor: LaborCost { rate_per_hour: params.labor_rate_per_hour, minutes: params.labor_minutes },
+        labor: LaborCost {
+            rate_per_hour: params.labor_rate_per_hour,
+            minutes: params.labor_minutes,
+        },
         hardware: Vec::new(),
         markup_percentages_override: None,
     };
-    Ok(NewJobOutcome { job, slice: summary, plate_selection_ignored })
+    Ok(NewJobOutcome {
+        job,
+        slice: summary,
+        plate_selection_ignored,
+    })
 }
 
 /// Writes `job` as TOML to `path`, overwriting any existing file there.
@@ -256,7 +272,10 @@ pub fn parse_job(text: &str) -> Result<Job, OpsError> {
 /// "every plate", `Some(Some(n))` means plate `n`. Lets a job saved with
 /// `plate = "all"` (e.g. a Bundled job with the original sliced file long
 /// gone) still be priced one plate at a time on demand.
-pub fn calc_job(job_path: &Path, plate_override: Option<Option<u32>>) -> Result<CostBreakdown, OpsError> {
+pub fn calc_job(
+    job_path: &Path,
+    plate_override: Option<Option<u32>>,
+) -> Result<CostBreakdown, OpsError> {
     let mut job = load_job(job_path)?;
     if let Some(plate_selection) = plate_override {
         job.plate_selection = plate_selection;
@@ -272,7 +291,13 @@ pub fn calc_job_data(job: &Job, slice: &SliceSummary) -> Result<CostBreakdown, O
     let printer = resolve_printer(&job.printer)?;
     let filament_profiles = resolve_filaments(&job.filament)?;
     let global = disk::load_global_config()?;
-    Ok(cost::calculate_cost(job, slice, &printer, &filament_profiles, &global)?)
+    Ok(cost::calculate_cost(
+        job,
+        slice,
+        &printer,
+        &filament_profiles,
+        &global,
+    )?)
 }
 
 /// Re-tiers an already-saved job up to `tier` (`Full` or `Bundled` only —
@@ -293,10 +318,19 @@ pub fn retier_job(job_path: &Path, tier: JobTier) -> Result<Job, OpsError> {
     }
     let job = load_job(job_path)?;
 
-    let printer = ProfileRef::Embedded { profile: Box::new(resolve_printer(&job.printer)?) };
+    let printer = ProfileRef::Embedded {
+        profile: Box::new(resolve_printer(&job.printer)?),
+    };
     let filament = resolve_filaments(&job.filament)?
         .into_iter()
-        .map(|(slot, profile)| (slot, ProfileRef::Embedded { profile: Box::new(profile) }))
+        .map(|(slot, profile)| {
+            (
+                slot,
+                ProfileRef::Embedded {
+                    profile: Box::new(profile),
+                },
+            )
+        })
         .collect();
     let source = if tier == JobTier::Bundled {
         JobSource::Embedded(resolve_slice_summary(&job, job_path)?)
@@ -304,7 +338,12 @@ pub fn retier_job(job_path: &Path, tier: JobTier) -> Result<Job, OpsError> {
         job.source
     };
 
-    Ok(Job { source, printer, filament, ..job })
+    Ok(Job {
+        source,
+        printer,
+        filament,
+        ..job
+    })
 }
 
 fn resolve_slice_summary(job: &Job, job_path: &Path) -> Result<SliceSummary, OpsError> {
@@ -314,7 +353,10 @@ fn resolve_slice_summary(job: &Job, job_path: &Path) -> Result<SliceSummary, Ops
             let resolved = if path.is_absolute() {
                 path.clone()
             } else {
-                job_path.parent().unwrap_or_else(|| Path::new(".")).join(path)
+                job_path
+                    .parent()
+                    .unwrap_or_else(|| Path::new("."))
+                    .join(path)
             };
             let bytes = fs::read(&resolved)?;
             let filename = resolved.file_name().and_then(|f| f.to_str()).unwrap_or("");
@@ -368,13 +410,17 @@ mod tests {
     /// fixture.
     #[test]
     fn calc_job_resolves_the_bundled_example_fixture() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../Testfiles/bundled-job-example.toml");
+        let path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../Testfiles/bundled-job-example.toml");
 
         // Default (no override): both plates summed.
         let breakdown = calc_job(&path, None).unwrap();
         assert!((breakdown.material_cost - 0.2654538075).abs() < 1e-6);
         assert_eq!(breakdown.material_breakdown.len(), 1);
-        assert_eq!(breakdown.material_breakdown[0].filament_name, "prusament-resin-orange");
+        assert_eq!(
+            breakdown.material_breakdown[0].filament_name,
+            "prusament-resin-orange"
+        );
         assert_eq!(breakdown.labor_cost, 3.75); // $15/hr * 15 minutes
         assert_eq!(breakdown.hardware_cost, 0.64); // 4 * $0.12 + 2 * $0.08
         assert_eq!(breakdown.hardware_breakdown.len(), 2);
@@ -396,7 +442,10 @@ mod tests {
             name: "test-print".into(),
             slice_path: sl1_fixture_path(),
             printer_name: "sl1-printer".into(),
-            filament_names: HashMap::from([(SINGLE_FILAMENT_SLOT.to_string(), "resin-grey".to_string())]),
+            filament_names: HashMap::from([(
+                SINGLE_FILAMENT_SLOT.to_string(),
+                "resin-grey".to_string(),
+            )]),
             plate_selection: None,
             labor_minutes: 10.0,
             labor_rate_per_hour: None,
@@ -409,11 +458,15 @@ mod tests {
         assert_eq!(outcome.job.plate_selection, None);
         assert_eq!(
             outcome.job.printer,
-            ProfileRef::Linked { name: "sl1-printer".into() }
+            ProfileRef::Linked {
+                name: "sl1-printer".into()
+            }
         );
         assert_eq!(
             outcome.job.filament[SINGLE_FILAMENT_SLOT],
-            ProfileRef::Linked { name: "resin-grey".into() }
+            ProfileRef::Linked {
+                name: "resin-grey".into()
+            }
         );
     }
 
@@ -425,7 +478,10 @@ mod tests {
             name: "test-print".into(),
             slice_path: sl1_fixture_path(),
             printer_name: "sl1-printer".into(),
-            filament_names: HashMap::from([(SINGLE_FILAMENT_SLOT.to_string(), "resin-grey".to_string())]),
+            filament_names: HashMap::from([(
+                SINGLE_FILAMENT_SLOT.to_string(),
+                "resin-grey".to_string(),
+            )]),
             plate_selection: Some(2),
             labor_minutes: 0.0,
             labor_rate_per_hour: None,
@@ -498,8 +554,15 @@ mod tests {
             )]),
             material_efficiency_factor_override: None,
             electricity_cost_per_kwh_override: None,
-            labor: LaborCost { rate_per_hour: Some(15.0), minutes: 20.0 },
-            hardware: vec![HardwareItem { name: "resin vat film".into(), cost: 2.0, quantity: 1 }],
+            labor: LaborCost {
+                rate_per_hour: Some(15.0),
+                minutes: 20.0,
+            },
+            hardware: vec![HardwareItem {
+                name: "resin vat film".into(),
+                cost: 2.0,
+                quantity: 1,
+            }],
             markup_percentages_override: None,
         };
 
@@ -555,13 +618,19 @@ mod tests {
         .unwrap();
         assert_eq!(list_printers().unwrap(), vec!["sl1-printer".to_string()]);
         assert_eq!(list_filaments().unwrap(), vec!["resin-grey".to_string()]);
-        assert_eq!(show_printer("sl1-printer").unwrap().kind, PrinterKind::Resin);
+        assert_eq!(
+            show_printer("sl1-printer").unwrap().kind,
+            PrinterKind::Resin
+        );
 
         let outcome = new_job(NewJobParams {
             name: "test-print".into(),
             slice_path: sl1_fixture_path(),
             printer_name: "sl1-printer".into(),
-            filament_names: HashMap::from([(SINGLE_FILAMENT_SLOT.to_string(), "resin-grey".to_string())]),
+            filament_names: HashMap::from([(
+                SINGLE_FILAMENT_SLOT.to_string(),
+                "resin-grey".to_string(),
+            )]),
             plate_selection: None,
             labor_minutes: 6.0,
             labor_rate_per_hour: None,
@@ -578,7 +647,10 @@ mod tests {
         // library nor the original sliced file to calc the same result.
         let bundled = retier_job(&path, JobTier::Bundled).unwrap();
         assert!(matches!(bundled.printer, ProfileRef::Embedded { .. }));
-        assert!(matches!(bundled.filament[SINGLE_FILAMENT_SLOT], ProfileRef::Embedded { .. }));
+        assert!(matches!(
+            bundled.filament[SINGLE_FILAMENT_SLOT],
+            ProfileRef::Embedded { .. }
+        ));
         assert!(matches!(bundled.source, JobSource::Embedded(_)));
         let bundled_path = temp_job_path("bundled-retiered");
         save_job(&bundled, &bundled_path).unwrap();
@@ -589,7 +661,10 @@ mod tests {
         let bundled_breakdown = calc_job(&bundled_path, None).unwrap(); // ...still calcs fine
         assert!((bundled_breakdown.material_cost - breakdown.material_cost).abs() < 1e-9);
 
-        assert!(matches!(retier_job(&path, JobTier::Default), Err(OpsError::Toml(_))));
+        assert!(matches!(
+            retier_job(&path, JobTier::Default),
+            Err(OpsError::Toml(_))
+        ));
 
         let _ = fs::remove_file(&path);
         let _ = fs::remove_file(&bundled_path);

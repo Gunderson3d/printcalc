@@ -31,7 +31,9 @@ impl SliceParser for PrusaSl1 {
 
         let print_time_seconds = required_f64(&config, "printTime")?;
         let used_material_ml = required_f64(&config, "usedMaterial")?;
-        let layer_height = config.get("layerHeight").and_then(|v| v.parse::<f64>().ok());
+        let layer_height = config
+            .get("layerHeight")
+            .and_then(|v| v.parse::<f64>().ok());
 
         Ok(SliceSummary {
             source_format: SourceFormat::PrusaSl1,

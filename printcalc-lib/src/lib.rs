@@ -95,10 +95,9 @@
 //! assert!(breakdown.total_cost > 0.0);
 //! ```
 
-pub mod model;
-pub mod formats;
 pub mod disk;
+pub mod formats;
+pub mod model;
 pub mod ops;
 
 pub use ops::*;
-

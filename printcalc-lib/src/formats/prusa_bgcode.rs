@@ -49,7 +49,10 @@ fn metadata_text(bytes: &[u8]) -> Result<String, ParseError> {
 
     let mut buf = Vec::new();
     loop {
-        match deserialiser.deserialise().map_err(|e| ParseError::InvalidField("bgcode", e.to_string()))? {
+        match deserialiser
+            .deserialise()
+            .map_err(|e| ParseError::InvalidField("bgcode", e.to_string()))?
+        {
             DeserialisedResult::FileHeader(_) => {}
             DeserialisedResult::Block(mut block) => {
                 if !matches!(block.kind, BlockKind::GCode | BlockKind::Thumbnail) {
@@ -69,7 +72,9 @@ mod tests {
     use super::*;
 
     fn read_test_file(name: &str) -> Vec<u8> {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../Testfiles").join(name);
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../Testfiles")
+            .join(name);
         std::fs::read(path).expect("test fixture missing")
     }
 
@@ -83,7 +88,10 @@ mod tests {
     #[test]
     fn parses_real_fixture() {
         let bytes = read_test_file("Shape-Box_0.4n_0.2mm_PLA_MINIIS_24m.bgcode");
-        assert!(PrusaBgcode::detect(&bytes, "Shape-Box_0.4n_0.2mm_PLA_MINIIS_24m.bgcode"));
+        assert!(PrusaBgcode::detect(
+            &bytes,
+            "Shape-Box_0.4n_0.2mm_PLA_MINIIS_24m.bgcode"
+        ));
 
         let summary = PrusaBgcode::parse(&bytes).unwrap();
         assert_eq!(summary.source_format, SourceFormat::PrusaBgcode);

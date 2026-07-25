@@ -23,7 +23,9 @@ impl SliceParser for PrusaGcode {
 
     fn parse(bytes: &[u8]) -> Result<SliceSummary, ParseError> {
         let text = std::str::from_utf8(bytes).map_err(|_| ParseError::NotThisFormat)?;
-        let comment_lines = text.lines().filter_map(|line| line.trim_start().strip_prefix(';'));
+        let comment_lines = text
+            .lines()
+            .filter_map(|line| line.trim_start().strip_prefix(';'));
         let metadata = prusa_metadata::parse_lines(comment_lines);
         prusa_metadata::build_slice_summary(&metadata, SourceFormat::PrusaGcode)
     }
@@ -32,7 +34,9 @@ impl SliceParser for PrusaGcode {
 /// Content-sniff fallback for a renamed file: not a zip (3MF/sl1), not a
 /// `.bgcode` (`GCDE` magic), and decodes as UTF-8 text.
 fn looks_like_plain_gcode(bytes: &[u8]) -> bool {
-    !bytes.starts_with(b"PK\x03\x04") && !bytes.starts_with(b"GCDE") && std::str::from_utf8(bytes).is_ok()
+    !bytes.starts_with(b"PK\x03\x04")
+        && !bytes.starts_with(b"GCDE")
+        && std::str::from_utf8(bytes).is_ok()
 }
 
 #[cfg(test)]
@@ -40,7 +44,9 @@ mod tests {
     use super::*;
 
     fn read_test_file(name: &str) -> Vec<u8> {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../Testfiles").join(name);
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../Testfiles")
+            .join(name);
         std::fs::read(path).expect("test fixture missing")
     }
 
@@ -49,14 +55,23 @@ mod tests {
         assert!(PrusaGcode::detect(b"", "widget.gcode"));
         // A renamed zip (3MF/sl1/sl1s) must not be picked up by the
         // plain-text fallback just because its extension doesn't match.
-        assert!(!PrusaGcode::detect(b"PK\x03\x04not actually gcode", "widget.sl1"));
-        assert!(!PrusaGcode::detect(b"GCDE not actually gcode either", "widget.bgcode"));
+        assert!(!PrusaGcode::detect(
+            b"PK\x03\x04not actually gcode",
+            "widget.sl1"
+        ));
+        assert!(!PrusaGcode::detect(
+            b"GCDE not actually gcode either",
+            "widget.bgcode"
+        ));
     }
 
     #[test]
     fn parses_real_fixture() {
         let bytes = read_test_file("Cube_0.2mm_PLA_Prusa MINI_20m7s.gcode");
-        assert!(PrusaGcode::detect(&bytes, "Cube_0.2mm_PLA_Prusa MINI_20m7s.gcode"));
+        assert!(PrusaGcode::detect(
+            &bytes,
+            "Cube_0.2mm_PLA_Prusa MINI_20m7s.gcode"
+        ));
 
         let summary = PrusaGcode::parse(&bytes).unwrap();
         assert_eq!(summary.source_format, SourceFormat::PrusaGcode);

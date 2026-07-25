@@ -25,7 +25,8 @@ pub fn printcalc_wasm_version() -> String {
 /// Parses a sliced file's bytes into a `SliceSummary`, returned as JSON.
 #[wasm_bindgen]
 pub fn parse_slice_file(bytes: &[u8], filename: &str) -> Result<String, JsError> {
-    let summary = formats::parse_slice_file(bytes, filename).map_err(|e| JsError::new(&e.to_string()))?;
+    let summary =
+        formats::parse_slice_file(bytes, filename).map_err(|e| JsError::new(&e.to_string()))?;
     serde_json::to_string(&summary).map_err(|e| JsError::new(&e.to_string()))
 }
 

@@ -113,7 +113,13 @@ mod tests {
     use super::*;
 
     fn usage(slot_id: &str, grams: f64) -> FilamentUsage {
-        FilamentUsage { slot_id: slot_id.into(), material_type: None, color: None, grams: Some(grams), ml: None }
+        FilamentUsage {
+            slot_id: slot_id.into(),
+            material_type: None,
+            color: None,
+            grams: Some(grams),
+            ml: None,
+        }
     }
 
     #[test]
@@ -139,6 +145,9 @@ mod tests {
                 },
             ],
         };
-        assert_eq!(summary.distinct_filament_slots(), vec!["1".to_string(), "2".to_string()]);
+        assert_eq!(
+            summary.distinct_filament_slots(),
+            vec!["1".to_string(), "2".to_string()]
+        );
     }
 }

@@ -60,12 +60,16 @@ pub fn run(cmd: FilamentCommand, interactive_mode: bool) -> Result<(), Box<dyn E
             color,
             vendor,
         } => {
-            let name = interactive::require_string(name, "name", "Filament name", interactive_mode)?;
+            let name =
+                interactive::require_string(name, "name", "Filament name", interactive_mode)?;
             let kind = match kind.as_str() {
                 "filament" => MaterialKind::Filament,
                 "resin" => MaterialKind::Resin,
                 other => {
-                    return Err(format!("invalid --kind {other:?} (expected \"filament\" or \"resin\")").into());
+                    return Err(format!(
+                        "invalid --kind {other:?} (expected \"filament\" or \"resin\")"
+                    )
+                    .into());
                 }
             };
             let (price_per_kg, price_per_liter) = match (price_per_kg, price_per_liter) {
@@ -77,10 +81,20 @@ pub fn run(cmd: FilamentCommand, interactive_mode: bool) -> Result<(), Box<dyn E
                     )?;
                     match kg {
                         Some(v) => (Some(v), None),
-                        None => (None, Some(interactive::require_f64(None, "price-per-liter", "Price per liter", true)?)),
+                        None => (
+                            None,
+                            Some(interactive::require_f64(
+                                None,
+                                "price-per-liter",
+                                "Price per liter",
+                                true,
+                            )?),
+                        ),
                     }
                 }
-                (None, None) => return Err("one of --price-per-kg or --price-per-liter is required".into()),
+                (None, None) => {
+                    return Err("one of --price-per-kg or --price-per-liter is required".into())
+                }
                 other => other,
             };
             let profile = FilamentProfile {
