@@ -63,10 +63,20 @@ pub struct JobInvocation {
     pub labor_rate: Option<f64>,
     pub format: OutputFormat,
     pub interactive: bool,
+    /// Re-tier an existing job (`full` or `bundled` only) instead of
+    /// calc'ing it — only meaningful when `file` is a `.toml`. Needs `-o`.
+    pub retier: Option<JobType>,
 }
 
 pub fn run(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
     if inv.file.extension().and_then(|e| e.to_str()) == Some("toml") {
+        if let Some(job_type) = inv.retier {
+            let output = inv.output.ok_or("--retier needs -o/--output to save the re-tiered job to")?;
+            let retiered = ops::retier_job(&inv.file, job_type.into())?;
+            ops::save_job(&retiered, &output)?;
+            println!("wrote {}", output.display());
+            return Ok(());
+        }
         // --plate here overrides the job's own stored plate_selection for
         // this calc only — e.g. pricing just one plate out of a Bundled
         // job saved with "all", without needing the original sliced file.

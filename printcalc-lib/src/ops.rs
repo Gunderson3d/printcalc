@@ -246,6 +246,38 @@ pub fn calc_job_data(job: &Job, slice: &SliceSummary) -> Result<CostBreakdown, O
     Ok(cost::calculate_cost(job, slice, &printer, &filament_profiles, &global)?)
 }
 
+/// Re-tiers an already-saved job up to `tier` (`Full` or `Bundled` only —
+/// there's no way back down to `Default` once refs/source are embedded,
+/// since the original library names and file path aren't tracked once
+/// they're resolved away). Resolves any `Linked` printer/filament refs
+/// against the library to embed them; for `Bundled`, also parses
+/// `source.path` (if it isn't already `Embedded`) to embed the
+/// `SliceSummary` too — the point being the result no longer needs the
+/// library or the original sliced file at calc time. `SPEC.md` §5, §8.
+pub fn retier_job(job_path: &Path, tier: JobTier) -> Result<Job, OpsError> {
+    if tier == JobTier::Default {
+        return Err(OpsError::Toml(
+            "can't re-tier to Default — a Full/Bundled job's linked names and original file path \
+             aren't tracked anymore once embedded"
+                .to_string(),
+        ));
+    }
+    let job = load_job(job_path)?;
+
+    let printer = ProfileRef::Embedded { profile: Box::new(resolve_printer(&job.printer)?) };
+    let filament = resolve_filaments(&job.filament)?
+        .into_iter()
+        .map(|(slot, profile)| (slot, ProfileRef::Embedded { profile: Box::new(profile) }))
+        .collect();
+    let source = if tier == JobTier::Bundled {
+        JobSource::Embedded(resolve_slice_summary(&job, job_path)?)
+    } else {
+        job.source
+    };
+
+    Ok(Job { source, printer, filament, ..job })
+}
+
 fn resolve_slice_summary(job: &Job, job_path: &Path) -> Result<SliceSummary, OpsError> {
     match &job.source {
         JobSource::Embedded(summary) => Ok(summary.clone()),
@@ -511,11 +543,27 @@ mod tests {
         let path = temp_job_path("default-tier");
         save_job(&outcome.job, &path).unwrap();
         let breakdown = calc_job(&path, None).unwrap();
-        let _ = fs::remove_file(&path);
-        let _ = fs::remove_dir_all(&config_dir);
+
+        // Re-tiering: Default -> Bundled embeds both the profiles and the
+        // parsed slice summary; the retiered job needs neither the
+        // library nor the original sliced file to calc the same result.
+        let bundled = retier_job(&path, JobTier::Bundled).unwrap();
+        assert!(matches!(bundled.printer, ProfileRef::Embedded { .. }));
+        assert!(matches!(bundled.filament[SINGLE_FILAMENT_SLOT], ProfileRef::Embedded { .. }));
+        assert!(matches!(bundled.source, JobSource::Embedded(_)));
+        let bundled_path = temp_job_path("bundled-retiered");
+        save_job(&bundled, &bundled_path).unwrap();
+        let _ = fs::remove_dir_all(&config_dir); // library gone...
         unsafe {
             std::env::remove_var("PRINTCALC_CONFIG_DIR");
         }
+        let bundled_breakdown = calc_job(&bundled_path, None).unwrap(); // ...still calcs fine
+        assert!((bundled_breakdown.material_cost - breakdown.material_cost).abs() < 1e-9);
+
+        assert!(matches!(retier_job(&path, JobTier::Default), Err(OpsError::Toml(_))));
+
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(&bundled_path);
 
         // Shape-Box.sl1s uses 2.598598 ml of resin.
         assert!((breakdown.material_cost - 2.598598 * (40.0 / 1000.0)).abs() < 1e-9);

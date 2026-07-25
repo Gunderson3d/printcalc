@@ -41,6 +41,12 @@ struct Cli {
     output: Option<PathBuf>,
     #[arg(short = 't', long = "type", value_enum, default_value = "default")]
     job_type: JobType,
+    /// Re-tier an existing job .toml (`full` or `bundled`) instead of
+    /// calc'ing it — resolves linked printer/filament refs (and, for
+    /// `bundled`, the sliced file) so the result needs neither at calc
+    /// time. Requires -o.
+    #[arg(long = "retier", value_enum)]
+    retier: Option<JobType>,
     /// "all" (default) or a plate number; ignored with a warning for
     /// single-plate formats.
     #[arg(short = 'P', long)]
@@ -83,6 +89,7 @@ fn main() {
                 filament_map: cli.filament_map,
                 output: cli.output,
                 job_type: cli.job_type,
+                retier: cli.retier,
                 plate: cli.plate,
                 labor_minutes: cli.labor_minutes,
                 labor_rate: cli.labor_rate,
