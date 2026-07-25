@@ -78,15 +78,17 @@ pub fn filaments_dir() -> PathBuf {
     config_dir().join("filaments")
 }
 
-/// Falls back to [`GlobalConfig::default`] if `config.toml` doesn't exist
-/// yet — there's no `printcalc config init` step, a fresh install just
-/// works with the defaults from `SPEC.md` §5.
+/// Falls back to [`GlobalConfig::default`] if `config.toml` can't be read
+/// — not just missing, *any* read failure. There's no `printcalc config
+/// init` step, so a fresh install (or a platform with no real filesystem
+/// at all, like `printcalc-wasm` in a browser — see `SPEC.md` §6, §8) just
+/// works with the defaults from `SPEC.md` §5 instead of hard-failing
+/// every calc.
 pub fn load_global_config() -> Result<GlobalConfig, LibraryError> {
     let path = config_dir().join("config.toml");
     match fs::read_to_string(&path) {
         Ok(text) => toml::from_str(&text).map_err(|e| LibraryError::Toml(e.to_string())),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(GlobalConfig::default()),
-        Err(e) => Err(e.into()),
+        Err(_) => Ok(GlobalConfig::default()),
     }
 }
 

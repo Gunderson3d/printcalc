@@ -214,7 +214,15 @@ pub fn save_job(job: &Job, path: &Path) -> Result<(), OpsError> {
 
 pub fn load_job(path: &Path) -> Result<Job, OpsError> {
     let text = fs::read_to_string(path)?;
-    toml::from_str(&text).map_err(|e| OpsError::Toml(e.to_string()))
+    parse_job(&text)
+}
+
+/// Parses job TOML already in hand — no filesystem access, so this is
+/// what `printcalc-wasm` uses (no filesystem to `load_job` from at all;
+/// see `SPEC.md` §6, §8) and what `load_job` itself calls after reading
+/// the file.
+pub fn parse_job(text: &str) -> Result<Job, OpsError> {
+    toml::from_str(text).map_err(|e| OpsError::Toml(e.to_string()))
 }
 
 /// Loads the job at `job_path`, resolves its printer/filament refs (against

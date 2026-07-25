@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>printcalc-wasm demo</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.3rem; }
+  section { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+  h2 { font-size: 1rem; margin-top: 0; }
+  pre { background: #f5f5f5; padding: 0.75rem; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; }
+  .error { color: #b00020; }
+  button { padding: 0.4rem 0.8rem; }
+</style>
+</head>
+<body>
+<h1>printcalc-wasm demo</h1>
+<p>
+  Exercises the two functions <code>printcalc-wasm</code> exports (SPEC.md §8):
+  <code>parse_slice_file</code> and <code>calc_job</code>. Nothing here touches a
+  filesystem or a profile library — everything is bytes/strings in, JSON out, per
+  <code>SPEC.md</code> §6's "no <code>ref =</code> library resolution" rule for WASM.
+</p>
+
+<section>
+  <h2>1. Parse a sliced file</h2>
+  <p>Pick any supported sliced file (.gcode, .bgcode, .gcode.3mf, .sl1, .sl1s).</p>
+  <input type="file" id="slice-input">
+  <pre id="slice-output">(pick a file)</pre>
+</section>
+
+<section>
+  <h2>2. Calc a Bundled-tier job</h2>
+  <p>
+    Must be Bundled tier (embedded profiles + embedded slice summary) — there's no
+    filesystem here to resolve a <code>ref =</code> or re-parse a <code>path =</code>
+    against. <code>Testfiles/bundled-job-example.toml</code> in the repo root is a
+    ready-made example.
+  </p>
+  <input type="file" id="job-input" accept=".toml">
+  <pre id="job-output">(pick a job .toml)</pre>
+</section>
+
+<script type="module">
+  import init, { parse_slice_file, calc_job, printcalc_wasm_version } from './pkg/printcalc_wasm.js';
+
+  await init();
+  document.title = `printcalc-wasm demo (v${printcalc_wasm_version()})`;
+
+  const sliceInput = document.getElementById('slice-input');
+  const sliceOutput = document.getElementById('slice-output');
+  sliceInput.addEventListener('change', async () => {
+    const file = sliceInput.files[0];
+    if (!file) return;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    try {
+      const summary = JSON.parse(parse_slice_file(bytes, file.name));
+      sliceOutput.textContent = JSON.stringify(summary, null, 2);
+      sliceOutput.classList.remove('error');
+    } catch (e) {
+      sliceOutput.textContent = String(e);
+      sliceOutput.classList.add('error');
+    }
+  });
+
+  const jobInput = document.getElementById('job-input');
+  const jobOutput = document.getElementById('job-output');
+  jobInput.addEventListener('change', async () => {
+    const file = jobInput.files[0];
+    if (!file) return;
+    const text = await file.text();
+    try {
+      const breakdown = JSON.parse(calc_job(text));
+      jobOutput.textContent = JSON.stringify(breakdown, null, 2);
+      jobOutput.classList.remove('error');
+    } catch (e) {
+      jobOutput.textContent = String(e);
+      jobOutput.classList.add('error');
+    }
+  });
+</script>
+</body>
+</html>
