@@ -18,12 +18,22 @@ use crate::model::filament::FilamentProfile;
 use crate::model::job::{Job, JobSource, LaborCost, ProfileRef};
 use crate::model::printer::PrinterProfile;
 
+/// Why an `ops` call failed — wraps every error type the functions below
+/// can hit, so callers (the CLI, the WASM bindings) only need one error
+/// type to handle.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum OpsError {
+    /// A file read/write failed.
     Io(std::io::Error),
+    /// Job TOML (de)serialization failed; the message is `toml`'s own
+    /// error text.
     Toml(String),
+    /// Parsing a sliced file failed.
     Parse(ParseError),
+    /// Costing a job failed.
     Calc(CalcError),
+    /// A profile library or global config operation failed.
     Library(LibraryError),
 }
 
@@ -64,28 +74,36 @@ impl From<LibraryError> for OpsError {
 
 // --- printer profiles ---
 
+/// Saves a printer profile to the local library, overwriting any existing
+/// one under the same name.
 pub fn add_printer(profile: &PrinterProfile) -> Result<(), OpsError> {
     Ok(library::save_printer(profile)?)
 }
 
+/// Every saved printer profile's name.
 pub fn list_printers() -> Result<Vec<String>, OpsError> {
     Ok(library::list_printers()?)
 }
 
+/// Loads a saved printer profile by name.
 pub fn show_printer(name: &str) -> Result<PrinterProfile, OpsError> {
     Ok(library::load_printer(name)?)
 }
 
 // --- filament profiles ---
 
+/// Saves a filament profile to the local library, overwriting any existing
+/// one under the same name.
 pub fn add_filament(profile: &FilamentProfile) -> Result<(), OpsError> {
     Ok(library::save_filament(profile)?)
 }
 
+/// Every saved filament profile's name.
 pub fn list_filaments() -> Result<Vec<String>, OpsError> {
     Ok(library::list_filaments()?)
 }
 
+/// Loads a saved filament profile by name.
 pub fn show_filament(name: &str) -> Result<FilamentProfile, OpsError> {
     Ok(library::load_filament(name)?)
 }
@@ -107,9 +125,13 @@ pub enum JobTier {
     Bundled,
 }
 
+/// Inputs to [`new_job`]/[`new_job_from_slice`].
 pub struct NewJobParams {
+    /// A free-form label for the job.
     pub name: String,
+    /// The sliced file to parse and cost against.
     pub slice_path: PathBuf,
+    /// Which library printer profile to use.
     pub printer_name: String,
     /// slot_id -> filament profile name. The common single-material case
     /// is just a one-entry map — building that one entry under the right
@@ -118,13 +140,19 @@ pub struct NewJobParams {
     /// is the caller's job, same as `[filament]` vs `[filaments]` is just
     /// two TOML shapes for the same underlying map (`SPEC.md` §2, §5).
     pub filament_names: HashMap<String, String>,
+    /// `None` => every plate; `Some(i)` => just plate `i`.
     pub plate_selection: Option<u32>,
+    /// Time spent on labor for this job.
     pub labor_minutes: f64,
+    /// `None` => fall back to the global config default.
     pub labor_rate_per_hour: Option<f64>,
+    /// Which shape to build the job in.
     pub tier: JobTier,
 }
 
+/// Result of [`new_job`]/[`new_job_from_slice`].
 pub struct NewJobOutcome {
+    /// The built job.
     pub job: Job,
     /// The parsed sliced file — handed back so a caller previewing the
     /// cost without saving (`SPEC.md` §7's bare `printcalc <slice>` form)
@@ -206,12 +234,14 @@ pub fn new_job_from_slice(params: NewJobParams, summary: SliceSummary) -> Result
     Ok(NewJobOutcome { job, slice: summary, plate_selection_ignored })
 }
 
+/// Writes `job` as TOML to `path`, overwriting any existing file there.
 pub fn save_job(job: &Job, path: &Path) -> Result<(), OpsError> {
     let text = toml::to_string(job).map_err(|e| OpsError::Toml(e.to_string()))?;
     fs::write(path, text)?;
     Ok(())
 }
 
+/// Reads and parses a job TOML file from disk.
 pub fn load_job(path: &Path) -> Result<Job, OpsError> {
     let text = fs::read_to_string(path)?;
     parse_job(&text)

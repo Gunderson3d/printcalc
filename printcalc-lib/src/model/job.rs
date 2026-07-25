@@ -17,11 +17,15 @@ use crate::formats::slice_summary::SliceSummary;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ProfileRef<T> {
+    /// Resolved by name against the local profile library at calc time.
     Linked {
+        /// The profile's name, e.g. in the library under `printers/<name>.toml`.
         #[serde(rename = "ref")]
         name: String,
     },
+    /// The profile's full data, stored directly in the job.
     Embedded {
+        /// The embedded profile itself.
         profile: Box<T>,
     },
 }
@@ -37,23 +41,38 @@ impl<T> ProfileRef<T> {
     }
 }
 
+/// Where a job's [`crate::formats::slice_summary::SliceSummary`] comes
+/// from. `Path` is re-parsed at calc time (Default/Full tiers); `Embedded`
+/// needs no sliced file at all (Bundled tier). `SPEC.md` §5.
 #[derive(Debug, Clone, PartialEq)]
 pub enum JobSource {
+    /// Re-parsed from this path (relative to the job file's own location,
+    /// if not absolute) at calc time.
     Path(PathBuf),
+    /// Parsed once and stored directly in the job.
     Embedded(SliceSummary),
 }
 
+/// Labor cost input for a job. No sensible global default for `minutes` —
+/// unlike `rate_per_hour`, it's always job-specific. `SPEC.md` §3.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct LaborCost {
+    /// `None` => fall back to the global config default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rate_per_hour: Option<f64>,
+    /// Time actually spent on labor for this job.
     pub minutes: f64,
 }
 
+/// A flat per-piece extra cost (inserts, magnets, ...) added on top of
+/// material/wear/electricity/labor. `SPEC.md` §2, §3.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HardwareItem {
+    /// e.g. "brass insert M3x5".
     pub name: String,
+    /// Cost per unit.
     pub cost: f64,
+    /// How many were used.
     pub quantity: u32,
 }
 
@@ -61,20 +80,35 @@ pub struct HardwareItem {
 /// §2, §5.
 pub const SINGLE_FILAMENT_SLOT: &str = "1";
 
+/// A costable print job: which sliced file (or embedded slice data), which
+/// printer/filament profiles to price it against, and whatever job-
+/// specific overrides/extras apply. Built via
+/// [`crate::ops::new_job`]/[`crate::ops::new_job_from_slice`], costed via
+/// [`super::cost::calculate_cost`]. `SPEC.md` §2, §5.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Job {
+    /// A free-form label — not used for anything besides display/output.
     pub name: String,
+    /// The sliced file this job costs (re-parsed at calc time), or its
+    /// already-parsed data embedded directly.
     pub source: JobSource,
     /// `None` => every plate; `Some(i)` => just plate `i`.
     pub plate_selection: Option<u32>,
+    /// Which printer profile to price wear/electricity against.
     pub printer: ProfileRef<PrinterProfile>,
     /// Keyed by `FilamentUsage::slot_id`. `[filament]` (singular) in TOML
     /// is sugar for a one-entry map under [`SINGLE_FILAMENT_SLOT`].
     pub filament: HashMap<String, ProfileRef<FilamentProfile>>,
+    /// `None` => use each filament profile's own `efficiency_factor`.
     pub material_efficiency_factor_override: Option<f64>,
+    /// `None` => fall back to the global config default.
     pub electricity_cost_per_kwh_override: Option<f64>,
+    /// Labor time and (optionally) rate for this job.
     pub labor: LaborCost,
+    /// Extra flat costs beyond material/wear/electricity/labor.
     pub hardware: Vec<HardwareItem>,
+    /// `None` => fall back to the global config default (`SPEC.md` §5:
+    /// `[50.0, 60.0, 70.0]`).
     pub markup_percentages_override: Option<Vec<f64>>,
 }
 

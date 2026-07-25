@@ -9,21 +9,36 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+/// Which slicer/format a [`SliceSummary`] was extracted from. `SPEC.md` §4.
+///
+/// `#[non_exhaustive]`: more formats land over time (`SPEC.md` §9), and
+/// each is a new variant here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum SourceFormat {
+    /// Bambu Studio `.gcode.3mf`.
     #[serde(rename = "bambu-3mf")]
     Bambu3mf,
+    /// PrusaSlicer/OrcaSlicer plain-text `.gcode`.
     #[serde(rename = "prusa-gcode")]
     PrusaGcode,
+    /// PrusaSlicer binary `.bgcode`.
     #[serde(rename = "prusa-bgcode")]
     PrusaBgcode,
+    /// PrusaSlicer resin `.sl1`/`.sl1s`.
     #[serde(rename = "prusa-sl1")]
     PrusaSl1,
 }
 
+/// The common shape every format parser ([`crate::formats::SliceParser`])
+/// extracts from a sliced file — print time and material usage, per plate.
+/// See `SPEC.md` §2.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SliceSummary {
+    /// Which parser produced this summary.
     pub source_format: SourceFormat,
+    /// Always at least one entry — single-plate formats (Prusa gcode/
+    /// bgcode/sl1/sl1s) produce exactly one.
     pub plates: Vec<PlateSummary>,
 }
 
@@ -50,28 +65,47 @@ impl SliceSummary {
     }
 }
 
+/// One plate's worth of a sliced file — print time and every filament slot
+/// with nonzero usage on it. `SPEC.md` §2.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlateSummary {
+    /// 1-based, matches the slicer's own plate numbering.
     pub plate_index: u32,
+    /// How long this plate took (or was predicted) to print.
     pub print_time_seconds: f64,
+    /// One entry per slot/tray/extruder that deposited material on this
+    /// plate — a plain single-material print still has exactly one.
     pub filament_usage: Vec<FilamentUsage>,
+    /// The printer model the slicer targeted, if the format reports one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub printer_model: Option<String>,
+    /// Layer height in mm, if the format reports one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub layer_height: Option<f64>,
+    /// Anything format-specific worth keeping that doesn't have a home in
+    /// the fields above.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub extra: HashMap<String, String>,
 }
 
+/// One filament/resin slot's usage on a plate — a Bambu AMS tray, a
+/// multi-extruder Prusa slot, or the sole slot of a single-material print.
+/// `SPEC.md` §2, §4.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FilamentUsage {
+    /// Opaque, format-native slot id — whatever the slicer itself uses to
+    /// distinguish slots (AMS tray `id`, Prusa extruder index, ...).
     pub slot_id: String,
+    /// Free-form material name/description as the slicer reports it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub material_type: Option<String>,
+    /// Free-form display color, e.g. a hex code.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
+    /// Set for filament (weight-measured) usage; `None` for resin.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub grams: Option<f64>,
+    /// Set for resin (volume-measured) usage; `None` for filament.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ml: Option<f64>,
 }

@@ -11,6 +11,8 @@ use super::printer::{PrinterKind, PrinterProfile};
 use crate::formats::slice_summary::{PlateSummary, SliceSummary, SourceFormat};
 use crate::library::GlobalConfig;
 
+/// The full cost breakdown for a job, returned by [`calculate_cost`].
+/// `SPEC.md` §2, §3, §7.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct CostBreakdown {
     /// One entry per selected plate (`SPEC.md` §7's plate breakdown),
@@ -18,28 +20,39 @@ pub struct CostBreakdown {
     /// adjusted like `MaterialLine::amount` — this describes what the
     /// slicer reported per plate, not what buying enough material costs.
     pub plate_breakdown: Vec<PlateLine>,
+    /// Total material cost across every selected plate/slot.
     pub material_cost: f64,
     /// `material_cost` split by contributing filament profile name — one
     /// entry per distinct profile, sorted by name. `SPEC.md` §7: a job
     /// where every slot happens to share one profile still collapses back
     /// to a single entry here.
     pub material_breakdown: Vec<MaterialLine>,
+    /// Printer depreciation cost for the selected print time.
     pub wear_cost: f64,
+    /// Electricity cost for the selected print time.
     pub electricity_cost: f64,
+    /// `job.labor.minutes` priced at the effective hourly rate.
     pub labor_cost: f64,
+    /// Total of every `job.hardware` item.
     pub hardware_cost: f64,
     /// `hardware_cost` split by item, one entry per `job.hardware` entry
     /// in order (unlike `material_breakdown`, not aggregated — each
     /// `HardwareItem` is already its own line item, not a slot resolved
     /// against a shared profile).
     pub hardware_breakdown: Vec<HardwareLine>,
+    /// Sum of every cost field above.
     pub total_cost: f64,
+    /// One suggested sale price per configured markup percentage.
     pub suggested_prices: Vec<SuggestedPrice>,
 }
 
+/// One selected plate's raw print-time/material numbers, as reported by
+/// the slicer. See [`CostBreakdown::plate_breakdown`].
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct PlateLine {
+    /// Matches the slicer's own plate numbering (1-based).
     pub plate_index: u32,
+    /// Copied from `PlateSummary::print_time_seconds`.
     pub print_time_seconds: f64,
     /// Sum of every `FilamentUsage::grams` on this plate (0.0 if none).
     pub grams: f64,
@@ -47,8 +60,11 @@ pub struct PlateLine {
     pub ml: f64,
 }
 
+/// One filament profile's contribution to `material_cost`. See
+/// [`CostBreakdown::material_breakdown`].
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct MaterialLine {
+    /// The contributing [`super::filament::FilamentProfile::name`].
     pub filament_name: String,
     /// Total amount used (after the efficiency factor), in `unit`.
     pub amount: f64,
@@ -59,24 +75,37 @@ pub struct MaterialLine {
     /// Price per 1000 `unit` (i.e. `price_per_kg`/`price_per_liter` as
     /// applied) — the profile's own price, not multiplied by `amount`.
     pub unit_price: f64,
+    /// `amount` priced at `unit_price`.
     pub cost: f64,
 }
 
+/// One `job.hardware` item's contribution to `hardware_cost`. See
+/// [`CostBreakdown::hardware_breakdown`].
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct HardwareLine {
+    /// Copied from `super::job::HardwareItem::name`.
     pub name: String,
+    /// How many were used.
     pub quantity: u32,
+    /// Cost per unit — `super::job::HardwareItem::cost` copied through.
     pub unit_cost: f64,
+    /// `unit_cost * quantity`.
     pub cost: f64,
 }
 
+/// One markup tier's suggested sale price. See
+/// [`CostBreakdown::suggested_prices`].
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct SuggestedPrice {
+    /// e.g. `50.0` for a 50% markup.
     pub markup_percent: f64,
+    /// `total_cost * (1 + markup_percent / 100)`.
     pub price: f64,
 }
 
+/// Why [`calculate_cost`] couldn't cost a job. `SPEC.md` §3.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum CalcError {
     /// `job.plate_selection` named a plate that isn't in the sliced file.
     PlateNotFound(u32),
@@ -86,14 +115,33 @@ pub enum CalcError {
     /// A filament profile had no price in the unit its usage was reported
     /// in (grams or ml), and no `density_g_per_cm3` to convert to the
     /// other unit it does have a price for.
-    MissingFilamentPrice { name: String, usage_unit: &'static str },
+    MissingFilamentPrice {
+        /// The filament profile's name.
+        name: String,
+        /// `"grams"` or `"ml"`.
+        usage_unit: &'static str,
+    },
     /// `printer.kind` doesn't match what the sliced file's format implies
     /// (e.g. a resin `.sl1s` costed against an FDM printer profile).
     /// Caught up front so it doesn't surface later as a confusing
     /// missing-price error instead.
-    PrinterKindMismatch { printer_name: String, printer_kind: PrinterKind, format: SourceFormat },
+    PrinterKindMismatch {
+        /// The printer profile's name.
+        printer_name: String,
+        /// The printer profile's actual `kind`.
+        printer_kind: PrinterKind,
+        /// The sliced file's format, which implied a different kind.
+        format: SourceFormat,
+    },
     /// Same as `PrinterKindMismatch`, for a filament profile's `kind`.
-    FilamentKindMismatch { filament_name: String, filament_kind: MaterialKind, format: SourceFormat },
+    FilamentKindMismatch {
+        /// The filament profile's name.
+        filament_name: String,
+        /// The filament profile's actual `kind`.
+        filament_kind: MaterialKind,
+        /// The sliced file's format, which implied a different kind.
+        format: SourceFormat,
+    },
 }
 
 /// The `PrinterKind` a sliced file's format implies — only `prusa-sl1` is

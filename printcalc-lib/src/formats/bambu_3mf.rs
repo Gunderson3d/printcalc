@@ -16,6 +16,7 @@ use xml::reader::{EventReader, XmlEvent};
 use super::slice_summary::{FilamentUsage, PlateSummary, SliceSummary, SourceFormat};
 use super::{ParseError, SliceParser};
 
+/// [`SliceParser`] for Bambu Studio `.gcode.3mf` — see the module docs.
 pub struct Bambu3mf;
 
 impl SliceParser for Bambu3mf {

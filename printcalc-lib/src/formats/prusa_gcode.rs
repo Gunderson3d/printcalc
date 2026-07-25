@@ -9,6 +9,8 @@
 use super::slice_summary::{SliceSummary, SourceFormat};
 use super::{prusa_metadata, ParseError, SliceParser};
 
+/// [`SliceParser`] for PrusaSlicer/OrcaSlicer plain-text `.gcode` — see
+/// the module docs.
 pub struct PrusaGcode;
 
 impl SliceParser for PrusaGcode {

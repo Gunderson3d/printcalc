@@ -14,6 +14,7 @@ use std::io::{Cursor, Read, Seek};
 use super::slice_summary::{FilamentUsage, PlateSummary, SliceSummary, SourceFormat};
 use super::{ParseError, SliceParser};
 
+/// [`SliceParser`] for PrusaSlicer resin `.sl1`/`.sl1s` — see the module docs.
 pub struct PrusaSl1;
 
 impl SliceParser for PrusaSl1 {

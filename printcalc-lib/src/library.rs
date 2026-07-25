@@ -14,11 +14,21 @@ use serde::{Deserialize, Serialize};
 use crate::model::filament::FilamentProfile;
 use crate::model::printer::PrinterProfile;
 
+/// Why a profile library or global config operation failed.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum LibraryError {
+    /// A read/write against the profile library failed.
     Io(std::io::Error),
+    /// TOML (de)serialization failed; the message is `toml`'s own error text.
     Toml(String),
-    NotFound { kind: &'static str, name: String },
+    /// No profile saved under this name.
+    NotFound {
+        /// `"printer"` or `"filament"`.
+        kind: &'static str,
+        /// The name that was looked up.
+        name: String,
+    },
 }
 
 impl fmt::Display for LibraryError {
@@ -42,8 +52,12 @@ impl From<std::io::Error> for LibraryError {
 /// `~/.config/printcalc/config.toml`. See `SPEC.md` §5.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GlobalConfig {
+    /// Fallback for `Job::electricity_cost_per_kwh_override`.
     pub electricity_cost_per_kwh: f64,
+    /// Fallback for `LaborCost::rate_per_hour`.
     pub labor_rate_per_hour: f64,
+    /// Fallback for `Job::markup_percentages_override`. Default `[50.0,
+    /// 60.0, 70.0]`.
     pub markup_percentages: Vec<f64>,
 }
 
@@ -70,10 +84,12 @@ pub fn config_dir() -> PathBuf {
         .join("printcalc")
 }
 
+/// `<config_dir>/printers/`.
 pub fn printers_dir() -> PathBuf {
     config_dir().join("printers")
 }
 
+/// `<config_dir>/filaments/`.
 pub fn filaments_dir() -> PathBuf {
     config_dir().join("filaments")
 }
@@ -131,26 +147,36 @@ fn list_profiles(dir: &Path) -> Result<Vec<String>, LibraryError> {
     Ok(names)
 }
 
+/// Saves `profile` to `printers_dir()/<name>.toml`, overwriting any
+/// existing file under that name.
 pub fn save_printer(profile: &PrinterProfile) -> Result<(), LibraryError> {
     save_profile(&printers_dir(), &profile.name, profile)
 }
 
+/// Loads a saved printer profile by name.
 pub fn load_printer(name: &str) -> Result<PrinterProfile, LibraryError> {
     load_profile(&printers_dir(), "printer", name)
 }
 
+/// Every saved printer profile's name, sorted. Empty (not an error) if
+/// `printers_dir()` doesn't exist yet.
 pub fn list_printers() -> Result<Vec<String>, LibraryError> {
     list_profiles(&printers_dir())
 }
 
+/// Saves `profile` to `filaments_dir()/<name>.toml`, overwriting any
+/// existing file under that name.
 pub fn save_filament(profile: &FilamentProfile) -> Result<(), LibraryError> {
     save_profile(&filaments_dir(), &profile.name, profile)
 }
 
+/// Loads a saved filament profile by name.
 pub fn load_filament(name: &str) -> Result<FilamentProfile, LibraryError> {
     load_profile(&filaments_dir(), "filament", name)
 }
 
+/// Every saved filament profile's name, sorted. Empty (not an error) if
+/// `filaments_dir()` doesn't exist yet.
 pub fn list_filaments() -> Result<Vec<String>, LibraryError> {
     list_profiles(&filaments_dir())
 }

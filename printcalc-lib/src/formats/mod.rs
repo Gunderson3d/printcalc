@@ -22,9 +22,13 @@ mod prusa_metadata;
 
 use slice_summary::SliceSummary;
 
+/// Why a [`SliceParser::parse`] call failed.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum ParseError {
+    /// Reading the file's bytes failed.
     Io(std::io::Error),
+    /// The zip container (3MF, sl1/sl1s) couldn't be opened.
     Zip(zip::result::ZipError),
     /// The file doesn't look like this parser's format at all.
     NotThisFormat,
@@ -67,6 +71,9 @@ pub trait SliceParser {
     /// Cheap check for whether `bytes`/`filename` look like this parser's
     /// format, used to pick a parser before committing to a full [`Self::parse`].
     fn detect(bytes: &[u8], filename: &str) -> bool;
+    /// Parses `bytes` into a [`SliceSummary`]. Callers should have already
+    /// checked [`Self::detect`], but implementations don't rely on it —
+    /// a malformed match still fails with a proper [`ParseError`].
     fn parse(bytes: &[u8]) -> Result<SliceSummary, ParseError>;
 }
 

@@ -17,6 +17,7 @@ use binarygcode::{BlockKind, DeserialisedResult, Deserialiser};
 use super::slice_summary::{SliceSummary, SourceFormat};
 use super::{prusa_metadata, ParseError, SliceParser};
 
+/// [`SliceParser`] for PrusaSlicer binary `.bgcode` — see the module docs.
 pub struct PrusaBgcode;
 
 impl SliceParser for PrusaBgcode {
