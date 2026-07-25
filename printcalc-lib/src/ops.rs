@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use crate::formats::slice_summary::SliceSummary;
 use crate::formats::{self, ParseError};
-use crate::library::{self, LibraryError};
+use crate::disk::{self, LibraryError};
 use crate::model::cost::{self, CalcError, CostBreakdown};
 use crate::model::filament::FilamentProfile;
 use crate::model::job::{Job, JobSource, LaborCost, ProfileRef};
@@ -74,33 +74,33 @@ impl From<LibraryError> for OpsError {
 /// Saves a printer profile to the local library, overwriting any existing
 /// one under the same name.
 pub fn add_printer(profile: &PrinterProfile) -> Result<(), OpsError> {
-    Ok(library::save_printer(profile)?)
+    Ok(disk::save_printer(profile)?)
 }
 
 /// Every saved printer profile's name.
 pub fn list_printers() -> Result<Vec<String>, OpsError> {
-    Ok(library::list_printers()?)
+    Ok(disk::list_printers()?)
 }
 
 /// Loads a saved printer profile by name.
 pub fn show_printer(name: &str) -> Result<PrinterProfile, OpsError> {
-    Ok(library::load_printer(name)?)
+    Ok(disk::load_printer(name)?)
 }
 
 /// Saves a filament profile to the local library, overwriting any existing
 /// one under the same name.
 pub fn add_filament(profile: &FilamentProfile) -> Result<(), OpsError> {
-    Ok(library::save_filament(profile)?)
+    Ok(disk::save_filament(profile)?)
 }
 
 /// Every saved filament profile's name.
 pub fn list_filaments() -> Result<Vec<String>, OpsError> {
-    Ok(library::list_filaments()?)
+    Ok(disk::list_filaments()?)
 }
 
 /// Loads a saved filament profile by name.
 pub fn show_filament(name: &str) -> Result<FilamentProfile, OpsError> {
-    Ok(library::load_filament(name)?)
+    Ok(disk::load_filament(name)?)
 }
 
 /// Which shape to write printer/filament refs and the source in. Not a
@@ -190,7 +190,7 @@ pub fn new_job_from_slice(params: NewJobParams, summary: SliceSummary) -> Result
     let printer = match params.tier {
         JobTier::Default => ProfileRef::Linked { name: params.printer_name },
         JobTier::Full | JobTier::Bundled => {
-            ProfileRef::Embedded { profile: Box::new(library::load_printer(&params.printer_name)?) }
+            ProfileRef::Embedded { profile: Box::new(disk::load_printer(&params.printer_name)?) }
         }
     };
     let filament: HashMap<String, ProfileRef<FilamentProfile>> = params
@@ -200,7 +200,7 @@ pub fn new_job_from_slice(params: NewJobParams, summary: SliceSummary) -> Result
             let profile_ref = match params.tier {
                 JobTier::Default => ProfileRef::Linked { name },
                 JobTier::Full | JobTier::Bundled => {
-                    ProfileRef::Embedded { profile: Box::new(library::load_filament(&name)?) }
+                    ProfileRef::Embedded { profile: Box::new(disk::load_filament(&name)?) }
                 }
             };
             Ok((slot, profile_ref))
@@ -271,7 +271,7 @@ pub fn calc_job(job_path: &Path, plate_override: Option<Option<u32>>) -> Result<
 pub fn calc_job_data(job: &Job, slice: &SliceSummary) -> Result<CostBreakdown, OpsError> {
     let printer = resolve_printer(&job.printer)?;
     let filament_profiles = resolve_filaments(&job.filament)?;
-    let global = library::load_global_config()?;
+    let global = disk::load_global_config()?;
     Ok(cost::calculate_cost(job, slice, &printer, &filament_profiles, &global)?)
 }
 
@@ -326,7 +326,7 @@ fn resolve_slice_summary(job: &Job, job_path: &Path) -> Result<SliceSummary, Ops
 fn resolve_printer(printer_ref: &ProfileRef<PrinterProfile>) -> Result<PrinterProfile, OpsError> {
     match printer_ref {
         ProfileRef::Embedded { profile } => Ok((**profile).clone()),
-        ProfileRef::Linked { name } => Ok(library::load_printer(name)?),
+        ProfileRef::Linked { name } => Ok(disk::load_printer(name)?),
     }
 }
 
@@ -337,7 +337,7 @@ fn resolve_filaments(
         .map(|(slot, r)| {
             let profile = match r {
                 ProfileRef::Embedded { profile } => (**profile).clone(),
-                ProfileRef::Linked { name } => library::load_filament(name)?,
+                ProfileRef::Linked { name } => disk::load_filament(name)?,
             };
             Ok((slot.clone(), profile))
         })

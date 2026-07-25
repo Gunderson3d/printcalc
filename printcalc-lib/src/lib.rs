@@ -20,7 +20,7 @@
 //! use printcalc_lib::formats::slice_summary::{
 //!     FilamentUsage, PlateSummary, SliceSummary, SourceFormat,
 //! };
-//! use printcalc_lib::library::GlobalConfig;
+//! use printcalc_lib::disk::GlobalConfig;
 //! use printcalc_lib::model::cost::calculate_cost;
 //! use printcalc_lib::model::filament::{FilamentProfile, MaterialKind};
 //! use printcalc_lib::model::job::{Job, JobSource, LaborCost, ProfileRef, SINGLE_FILAMENT_SLOT};
@@ -97,7 +97,7 @@
 
 pub mod model;
 pub mod formats;
-pub mod library;
+pub mod disk;
 pub mod ops;
 
 pub use ops::*;

@@ -30,7 +30,7 @@ pub enum ProfileRef<T> {
 
 impl<T> ProfileRef<T> {
     /// The profile itself, if embedded. `Linked` refs must be resolved
-    /// against the local profile library (see `library.rs`) before calc.
+    /// against the local profile library (see `disk.rs`) before calc.
     pub fn embedded(&self) -> Option<&T> {
         match self {
             ProfileRef::Embedded { profile } => Some(profile),

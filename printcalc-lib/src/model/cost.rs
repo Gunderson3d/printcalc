@@ -9,7 +9,7 @@ use super::filament::{FilamentProfile, MaterialKind};
 use super::job::Job;
 use super::printer::{PrinterKind, PrinterProfile};
 use crate::formats::slice_summary::{PlateSummary, SliceSummary, SourceFormat};
-use crate::library::GlobalConfig;
+use crate::disk::GlobalConfig;
 
 /// The full cost breakdown for a job, returned by [`calculate_cost`].
 #[derive(Debug, Clone, PartialEq, Serialize)]
