@@ -15,11 +15,25 @@
 use wasm_bindgen::prelude::*;
 
 use printcalc_lib::model::job::JobSource;
-use printcalc_lib::{formats, ops};
+use printcalc_lib::{builtin, formats, ops};
 
 #[wasm_bindgen]
 pub fn printcalc_wasm_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
+}
+
+/// Built-in printer presets (see `printcalc_lib::builtin`), as a JSON
+/// array of `PrinterProfile` — lets the host page offer them without a
+/// filesystem to load a saved library from.
+#[wasm_bindgen]
+pub fn builtin_printers() -> Result<String, JsError> {
+    serde_json::to_string(&builtin::printers()).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Built-in filament presets, as a JSON array of `FilamentProfile`.
+#[wasm_bindgen]
+pub fn builtin_filaments() -> Result<String, JsError> {
+    serde_json::to_string(&builtin::filaments()).map_err(|e| JsError::new(&e.to_string()))
 }
 
 /// Parses a sliced file's bytes into a `SliceSummary`, returned as JSON.

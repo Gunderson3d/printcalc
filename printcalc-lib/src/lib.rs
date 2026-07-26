@@ -95,6 +95,7 @@
 //! assert!(breakdown.total_cost > 0.0);
 //! ```
 
+pub mod builtin;
 pub mod disk;
 pub mod formats;
 pub mod model;
