@@ -47,12 +47,11 @@ pub struct JobInvocation {
     /// baked into the file).
     pub name: Option<String>,
     pub printer: Option<String>,
-    /// One filament for the whole job — mutually exclusive with
-    /// `filament_map`. Only valid when the print has (at most) one real
-    /// filament slot.
+    /// Default filament for every slot; `filament_map` overrides specific
+    /// slots on top of it.
     pub filament: Option<String>,
     /// `slot=name,slot=name,...` — one filament per AMS tray / extruder.
-    /// Mutually exclusive with `filament`.
+    /// Slots it doesn't cover fall back to `filament`, if given.
     pub filament_map: Option<String>,
     pub output: Option<PathBuf>,
     pub job_type: JobType,
@@ -79,10 +78,20 @@ pub fn run(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
             println!("wrote {}", output.display());
             return Ok(());
         }
-        // --plate here overrides the job's own stored plate_selection for
-        // this calc only — e.g. pricing just one plate out of a Bundled
-        // job saved with "all", without needing the original sliced file.
+        // --plate here overrides the job's own stored plate_selection —
+        // persisted if -o saves a copy below, calc-only otherwise (e.g.
+        // pricing just one plate out of a Bundled job saved with "all",
+        // without needing the original sliced file).
         let plate_override = parse_plate_override(inv.plate.as_deref())?;
+        if let Some(output) = &inv.output {
+            let mut job = ops::load_job(&inv.file)?;
+            if let Some(plate_selection) = plate_override {
+                job.plate_selection = plate_selection;
+            }
+            ops::save_job(&job, output)?;
+            println!("wrote {}", output.display());
+            return Ok(());
+        }
         let breakdown = ops::calc_job(&inv.file, plate_override)?;
         print_result(&breakdown, inv.format);
         return Ok(());
@@ -176,52 +185,72 @@ fn parse_plate_override(plate: Option<&str>) -> Result<Option<Option<u32>>, Box<
     }
 }
 
-/// Builds the slot_id -> filament name map for a new job. `--filament`
-/// (one profile for the whole job) and `--filament-map` (`slot=name`
-/// pairs) are mutually exclusive, both just two ways to write the same
-/// underlying map. When neither is given, `--interactive`
-/// only prompts per-slot if the slice actually has more than one nonzero
-/// `FilamentUsage` — a single-material file still gets one plain prompt.
+/// Builds the slot_id -> filament name map for a new job. `--filament-map`
+/// (`slot=name` pairs) sets specific slots; `--filament` fills in a default
+/// for any slot `--filament-map` didn't cover (or every slot, if
+/// `--filament-map` wasn't given at all) — both just build the same
+/// underlying map. When neither covers a slot, `--interactive` prompts for
+/// it (per-slot, labeled by slot id) unless the slice actually has just one
+/// real `FilamentUsage`, which still gets one plain prompt.
 fn resolve_filament_names(
     slice: &printcalc_lib::formats::slice_summary::SliceSummary,
     filament: Option<String>,
     filament_map: Option<String>,
     interactive_mode: bool,
 ) -> Result<HashMap<String, String>, Box<dyn Error>> {
-    if filament.is_some() && filament_map.is_some() {
-        return Err("--filament and --filament-map are mutually exclusive".into());
-    }
-
     let distinct_slots = slice.distinct_filament_slots();
-    let multi_slot = distinct_slots.len() > 1;
 
-    if multi_slot && filament.is_some() {
-        return Err(format!(
-            "this print uses multiple filament slots ({}) — use --filament-map slot=name,... instead of --filament",
-            distinct_slots.join(", ")
-        )
-        .into());
+    let mut map: HashMap<String, String> = match filament_map {
+        Some(s) => parse_filament_map(&s)?,
+        None => HashMap::new(),
+    };
+
+    // Single-material print with neither flag given: keep the plain,
+    // not-slot-labeled prompt instead of the per-slot one below.
+    if distinct_slots.len() <= 1 && map.is_empty() {
+        let slot = distinct_slots
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| "1".to_string());
+        let name = interactive::require_choice(
+            filament,
+            "filament",
+            "Filament profile name",
+            interactive_mode,
+            &ops::list_filaments().unwrap_or_default(),
+        )?;
+        return Ok(HashMap::from([(slot, name)]));
     }
 
-    if let Some(map_str) = filament_map {
-        return parse_filament_map(&map_str);
-    }
-    if multi_slot {
-        return prompt_filament_map(&distinct_slots, interactive_mode);
+    let missing: Vec<String> = distinct_slots
+        .iter()
+        .filter(|slot| !map.contains_key(*slot))
+        .cloned()
+        .collect();
+
+    if let Some(default_name) = &filament {
+        for slot in &missing {
+            map.insert(slot.clone(), default_name.clone());
+        }
+    } else if !missing.is_empty() {
+        if interactive_mode {
+            let choices = ops::list_filaments().unwrap_or_default();
+            for slot in &missing {
+                let label = format!("Filament profile for slot {slot}");
+                let name = interactive::require_choice(None, "filament-map", &label, true, &choices)?;
+                map.insert(slot.clone(), name);
+            }
+        } else {
+            return Err(format!(
+                "this print uses multiple filament slots ({}) — no filament for slot(s) {}; pass --filament as a default, or --filament-map slot=name,... for each",
+                distinct_slots.join(", "),
+                missing.join(", ")
+            )
+            .into());
+        }
     }
 
-    let slot = distinct_slots
-        .into_iter()
-        .next()
-        .unwrap_or_else(|| "1".to_string());
-    let name = interactive::require_choice(
-        filament,
-        "filament",
-        "Filament profile name",
-        interactive_mode,
-        &ops::list_filaments().unwrap_or_default(),
-    )?;
-    Ok(HashMap::from([(slot, name)]))
+    Ok(map)
 }
 
 fn parse_filament_map(s: &str) -> Result<HashMap<String, String>, Box<dyn Error>> {
@@ -231,28 +260,6 @@ fn parse_filament_map(s: &str) -> Result<HashMap<String, String>, Box<dyn Error>
                 format!("invalid --filament-map entry {pair:?}, expected slot=name")
             })?;
             Ok((slot.trim().to_string(), name.trim().to_string()))
-        })
-        .collect()
-}
-
-fn prompt_filament_map(
-    slots: &[String],
-    interactive_mode: bool,
-) -> Result<HashMap<String, String>, Box<dyn Error>> {
-    if !interactive_mode {
-        return Err(format!(
-            "this print uses multiple filament slots ({}) — pass --filament-map slot=name,... (rerun without --no-input to be prompted per slot)",
-            slots.join(", ")
-        )
-        .into());
-    }
-    let choices = ops::list_filaments().unwrap_or_default();
-    slots
-        .iter()
-        .map(|slot| {
-            let label = format!("Filament profile for slot {slot}");
-            let name = interactive::require_choice(None, "filament-map", &label, true, &choices)?;
-            Ok((slot.clone(), name))
         })
         .collect()
 }

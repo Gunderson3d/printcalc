@@ -107,6 +107,17 @@ pub fn load_global_config() -> Result<GlobalConfig, LibraryError> {
     }
 }
 
+/// Persists `config` to `<config_dir>/config.toml`, creating the config
+/// directory first if it doesn't exist yet (a fresh install has no
+/// `~/.config/printcalc/` at all until something's saved to it).
+pub fn save_global_config(config: &GlobalConfig) -> Result<(), LibraryError> {
+    let dir = config_dir();
+    fs::create_dir_all(&dir)?;
+    let text = toml::to_string(config).map_err(|e| LibraryError::Toml(e.to_string()))?;
+    fs::write(dir.join("config.toml"), text)?;
+    Ok(())
+}
+
 fn save_profile<T: Serialize>(dir: &Path, name: &str, profile: &T) -> Result<(), LibraryError> {
     fs::create_dir_all(dir)?;
     let text = toml::to_string(profile).map_err(|e| LibraryError::Toml(e.to_string()))?;

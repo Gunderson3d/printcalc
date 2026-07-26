@@ -13,6 +13,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
+use cli::config::ConfigArgs;
 use cli::filament::FilamentArgs;
 use cli::job::{JobInvocation, JobType, OutputFormat};
 use cli::printer::PrinterArgs;
@@ -33,10 +34,12 @@ struct Cli {
     name: Option<String>,
     #[arg(short = 'p', long)]
     printer: Option<String>,
+    /// Default filament for every slot; overridden per-slot by
+    /// --filament-map.
     #[arg(short = 'f', long)]
     filament: Option<String>,
     /// One filament per AMS tray/extruder: `slot=name,slot=name,...`.
-    /// Mutually exclusive with --filament.
+    /// Slots left out fall back to --filament, if given.
     #[arg(long = "filament-map")]
     filament_map: Option<String>,
     /// Save the job here. Without this, nothing is written — the cost is
@@ -75,6 +78,9 @@ struct Cli {
 enum Command {
     Printer(PrinterArgs),
     Filament(FilamentArgs),
+    /// View/set global defaults (electricity cost, labor rate, markup
+    /// percentages) — saved to `~/.config/printcalc/config.toml`.
+    Config(ConfigArgs),
 }
 
 fn main() {
@@ -84,6 +90,7 @@ fn main() {
     let result = match cli.command {
         Some(Command::Printer(args)) => cli::printer::run(args.command, interactive),
         Some(Command::Filament(args)) => cli::filament::run(args.command, interactive),
+        Some(Command::Config(args)) => cli::config::run(args),
         None => match cli.file {
             Some(file) => cli::job::run(JobInvocation {
                 file,

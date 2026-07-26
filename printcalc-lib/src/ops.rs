@@ -72,6 +72,17 @@ impl From<LibraryError> for OpsError {
     }
 }
 
+/// Loads the global config — saved overrides layered over
+/// [`disk::GlobalConfig::default`] (see [`disk::load_global_config`]).
+pub fn show_config() -> Result<disk::GlobalConfig, OpsError> {
+    Ok(disk::load_global_config()?)
+}
+
+/// Persists the global config, overwriting any previously saved one.
+pub fn set_config(config: &disk::GlobalConfig) -> Result<(), OpsError> {
+    Ok(disk::save_global_config(config)?)
+}
+
 /// Saves a printer profile to the local library, overwriting any existing
 /// one under the same name.
 pub fn add_printer(profile: &PrinterProfile) -> Result<(), OpsError> {
