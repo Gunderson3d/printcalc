@@ -17,7 +17,7 @@ pub enum MaterialKind {
 
 /// A reusable material definition, saved under `~/.config/printcalc/filaments/`
 /// and referenced from jobs by name (or embedded directly), keyed by slot in
-/// [`super::job::Job::filament`].
+/// [`super::job::Job::material`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MaterialProfile {
     /// Also the filename stem it's saved under.

@@ -7,8 +7,8 @@
 //! the plain `.gcode` footer (`filament used [g]=`, `estimated printing
 //! time (normal mode)=`, `printer_model=`, `filament_type=`,
 //! `layer_height=`, ...), just without the `; ` comment prefix or spaces
-//! around `=` — [`super::prusa_metadata::parse_lines`] handles both shapes
-//! already (it only trims and splits on `=`). See [`super::prusa_metadata`]
+//! around `=` — `prusa_metadata::parse_lines` (private) handles both shapes
+//! already (it only trims and splits on `=`). See `prusa_metadata` (private)
 //! for the shared key=value parsing used by both this and
 //! [`super::prusa_gcode`].
 

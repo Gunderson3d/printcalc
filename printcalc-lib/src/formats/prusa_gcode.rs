@@ -3,7 +3,7 @@
 //! `; estimated printing time (normal mode) = 20m 7s`, `; filament used
 //! [g] = 3.10`, `; filament_type = PLA`). Confirmed against
 //! `Testfiles/Cube_0.2mm_PLA_Prusa MINI_20m7s.gcode`. Shares the key=value
-//! line parsing and `SliceSummary` building in [`super::prusa_metadata`]
+//! line parsing and `SliceSummary` building in `prusa_metadata` (private)
 //! with [`super::prusa_bgcode`].
 
 use super::slice_summary::{SliceSummary, SourceFormat};
