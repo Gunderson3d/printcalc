@@ -10,7 +10,7 @@ use std::error::Error;
 
 use clap::{Args, Subcommand};
 
-use printcalc_lib::model::filament::{FilamentProfile, MaterialKind};
+use printcalc_lib::model::filament::{MaterialKind, MaterialProfile};
 use printcalc_lib::ops;
 
 use crate::interactive;
@@ -97,7 +97,7 @@ pub fn run(cmd: FilamentCommand, interactive_mode: bool) -> Result<(), Box<dyn E
                 }
                 other => other,
             };
-            let profile = FilamentProfile {
+            let profile = MaterialProfile {
                 name: name.clone(),
                 kind,
                 price_per_kg,
@@ -125,7 +125,7 @@ pub fn run(cmd: FilamentCommand, interactive_mode: bool) -> Result<(), Box<dyn E
     }
 }
 
-fn print_filament(f: &FilamentProfile) {
+fn print_filament(f: &MaterialProfile) {
     println!("name: {}", f.name);
     println!("kind: {:?}", f.kind);
     if let Some(p) = f.price_per_kg {

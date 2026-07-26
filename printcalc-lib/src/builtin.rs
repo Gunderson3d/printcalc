@@ -7,14 +7,14 @@
 //! these when a name isn't found in the local library.
 //!
 //! Starter data — swap in a real catalog by editing those TOML files;
-//! each is an array of profiles (`[[printer]]`/`[[filament]]`), in the
+//! each is an array of profiles (`[[printer]]`/`[[material]]`), in the
 //! same shape as a profile saved under `~/.config/printcalc/`.
 
 use std::sync::LazyLock;
 
 use serde::Deserialize;
 
-use crate::model::filament::FilamentProfile;
+use crate::model::filament::MaterialProfile;
 use crate::model::printer::PrinterProfile;
 
 #[derive(Deserialize)]
@@ -24,7 +24,7 @@ struct PrintersFile {
 
 #[derive(Deserialize)]
 struct FilamentsFile {
-    filament: Vec<FilamentProfile>,
+    material: Vec<MaterialProfile>,
 }
 
 fn parse_printers(toml_str: &str) -> Vec<PrinterProfile> {
@@ -33,16 +33,16 @@ fn parse_printers(toml_str: &str) -> Vec<PrinterProfile> {
         .printer
 }
 
-fn parse_filaments(toml_str: &str) -> Vec<FilamentProfile> {
+fn parse_filaments(toml_str: &str) -> Vec<MaterialProfile> {
     toml::from_str::<FilamentsFile>(toml_str)
         .expect("builtin filament TOML is well-formed")
-        .filament
+        .material
 }
 
 static PRINTERS: LazyLock<Vec<PrinterProfile>> =
     LazyLock::new(|| parse_printers(include_str!("../builtin/printers.toml")));
 
-static FILAMENTS: LazyLock<Vec<FilamentProfile>> = LazyLock::new(|| {
+static FILAMENTS: LazyLock<Vec<MaterialProfile>> = LazyLock::new(|| {
     let mut filaments = parse_filaments(include_str!("../builtin/filaments.toml"));
     filaments.extend(parse_filaments(include_str!("../builtin/resin.toml")));
     filaments
@@ -59,12 +59,12 @@ pub fn printer(name: &str) -> Option<&'static PrinterProfile> {
 }
 
 /// Every built-in filament preset (filament and resin kinds alike).
-pub fn filaments() -> &'static [FilamentProfile] {
+pub fn filaments() -> &'static [MaterialProfile] {
     &FILAMENTS
 }
 
 /// A built-in filament preset by name.
-pub fn filament(name: &str) -> Option<&'static FilamentProfile> {
+pub fn filament(name: &str) -> Option<&'static MaterialProfile> {
     FILAMENTS.iter().find(|f| f.name == name)
 }
 

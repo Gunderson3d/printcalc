@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
-use crate::model::filament::FilamentProfile;
+use crate::model::filament::MaterialProfile;
 use crate::model::printer::PrinterProfile;
 
 /// Why a profile library or global config operation failed.
@@ -168,12 +168,12 @@ pub fn list_printers() -> Result<Vec<String>, LibraryError> {
 
 /// Saves `profile` to `filaments_dir()/<name>.toml`, overwriting any
 /// existing file under that name.
-pub fn save_filament(profile: &FilamentProfile) -> Result<(), LibraryError> {
+pub fn save_filament(profile: &MaterialProfile) -> Result<(), LibraryError> {
     save_profile(&filaments_dir(), &profile.name, profile)
 }
 
 /// Loads a saved filament profile by name.
-pub fn load_filament(name: &str) -> Result<FilamentProfile, LibraryError> {
+pub fn load_filament(name: &str) -> Result<MaterialProfile, LibraryError> {
     load_profile(&filaments_dir(), "filament", name)
 }
 
@@ -197,7 +197,7 @@ mod tests {
     #[test]
     fn save_load_and_list_round_trip() {
         let dir = temp_dir("save-load-list");
-        let profile = FilamentProfile {
+        let profile = MaterialProfile {
             name: "pla-black".into(),
             kind: MaterialKind::Filament,
             price_per_kg: Some(18.99),
@@ -209,7 +209,7 @@ mod tests {
         };
 
         save_profile(&dir, &profile.name, &profile).unwrap();
-        let loaded: FilamentProfile = load_profile(&dir, "filament", "pla-black").unwrap();
+        let loaded: MaterialProfile = load_profile(&dir, "filament", "pla-black").unwrap();
         assert_eq!(loaded, profile);
         assert_eq!(list_profiles(&dir).unwrap(), vec!["pla-black".to_string()]);
 
@@ -219,7 +219,7 @@ mod tests {
     #[test]
     fn load_missing_profile_is_not_found() {
         let dir = temp_dir("missing");
-        let err = load_profile::<FilamentProfile>(&dir, "filament", "nope").unwrap_err();
+        let err = load_profile::<MaterialProfile>(&dir, "filament", "nope").unwrap_err();
         assert!(matches!(
             err,
             LibraryError::NotFound { kind: "filament", name } if name == "nope"

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use super::filament::FilamentProfile;
+use super::filament::MaterialProfile;
 use super::printer::PrinterProfile;
 use crate::formats::slice_summary::SliceSummary;
 
@@ -95,7 +95,7 @@ pub struct Job {
     pub printer: ProfileRef<PrinterProfile>,
     /// Keyed by `FilamentUsage::slot_id`. `[filament]` (singular) in TOML
     /// is sugar for a one-entry map under [`SINGLE_FILAMENT_SLOT`].
-    pub filament: HashMap<String, ProfileRef<FilamentProfile>>,
+    pub filament: HashMap<String, ProfileRef<MaterialProfile>>,
     /// `None` => use each filament profile's own `efficiency_factor`.
     pub material_efficiency_factor_override: Option<f64>,
     /// `None` => fall back to the global config default.
@@ -137,9 +137,9 @@ struct JobWire {
     source: SourceWire,
     printer: ProfileRef<PrinterProfile>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    filament: Option<ProfileRef<FilamentProfile>>,
+    filament: Option<ProfileRef<MaterialProfile>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    filaments: Option<HashMap<String, ProfileRef<FilamentProfile>>>,
+    filaments: Option<HashMap<String, ProfileRef<MaterialProfile>>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     material_efficiency_factor_override: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

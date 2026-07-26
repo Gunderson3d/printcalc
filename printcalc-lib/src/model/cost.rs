@@ -5,7 +5,7 @@ use std::fmt;
 
 use serde::Serialize;
 
-use super::filament::{FilamentProfile, MaterialKind};
+use super::filament::{MaterialKind, MaterialProfile};
 use super::job::Job;
 use super::printer::{PrinterKind, PrinterProfile};
 use crate::disk::GlobalConfig;
@@ -63,7 +63,7 @@ pub struct PlateLine {
 /// [`CostBreakdown::material_breakdown`].
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct MaterialLine {
-    /// The contributing [`super::filament::FilamentProfile::name`].
+    /// The contributing [`super::filament::MaterialProfile::name`].
     pub filament_name: String,
     /// Total amount used (after the efficiency factor), in `unit`.
     pub amount: f64,
@@ -110,7 +110,7 @@ pub enum CalcError {
     PlateNotFound(u32),
     /// A `FilamentUsage` slot had nonzero usage but no entry in
     /// `job.filament`.
-    MissingFilamentProfile(String),
+    MissingMaterialProfile(String),
     /// A filament profile had no price in the unit its usage was reported
     /// in (grams or ml), and no `density_g_per_cm3` to convert to the
     /// other unit it does have a price for.
@@ -169,7 +169,7 @@ impl fmt::Display for CalcError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             CalcError::PlateNotFound(i) => write!(f, "plate {i} not found in sliced file"),
-            CalcError::MissingFilamentProfile(slot) => {
+            CalcError::MissingMaterialProfile(slot) => {
                 write!(f, "no filament profile mapped for slot {slot}")
             }
             CalcError::MissingFilamentPrice { name, usage_unit } => write!(
@@ -202,7 +202,7 @@ pub fn calculate_cost(
     job: &Job,
     slice: &SliceSummary,
     printer: &PrinterProfile,
-    filament_profiles: &HashMap<String, FilamentProfile>,
+    filament_profiles: &HashMap<String, MaterialProfile>,
     global: &GlobalConfig,
 ) -> Result<CostBreakdown, CalcError> {
     let format = slice.source_format;
@@ -269,7 +269,7 @@ pub fn calculate_cost(
             };
             let profile = filament_profiles
                 .get(&usage.slot_id)
-                .ok_or_else(|| CalcError::MissingFilamentProfile(usage.slot_id.clone()))?;
+                .ok_or_else(|| CalcError::MissingMaterialProfile(usage.slot_id.clone()))?;
             // Prefer the profile's price in the usage's own unit; if that's
             // missing, fall back to converting the amount via
             // density_g_per_cm3 (1 ml = 1 cm3, so grams = ml * density) and
@@ -410,8 +410,8 @@ mod tests {
         }
     }
 
-    fn filament(name: &str, price_per_kg: f64) -> FilamentProfile {
-        FilamentProfile {
+    fn filament(name: &str, price_per_kg: f64) -> MaterialProfile {
+        MaterialProfile {
             name: name.into(),
             kind: MaterialKind::Filament,
             price_per_kg: Some(price_per_kg),
@@ -433,14 +433,14 @@ mod tests {
 
     /// Like [`filament`], but `kind: Resin` and priced per kg instead of
     /// per liter — used to test the density-conversion fallback.
-    fn resin_priced_per_kg(name: &str, price_per_kg: f64) -> FilamentProfile {
-        FilamentProfile {
+    fn resin_priced_per_kg(name: &str, price_per_kg: f64) -> MaterialProfile {
+        MaterialProfile {
             kind: MaterialKind::Resin,
             ..filament(name, price_per_kg)
         }
     }
 
-    fn base_job(filament: HashMap<String, ProfileRef<FilamentProfile>>, labor_minutes: f64) -> Job {
+    fn base_job(filament: HashMap<String, ProfileRef<MaterialProfile>>, labor_minutes: f64) -> Job {
         Job {
             name: "test".into(),
             source: JobSource::Path("test.gcode.3mf".into()),
@@ -709,7 +709,7 @@ mod tests {
         let global = GlobalConfig::default();
 
         let err = calculate_cost(&job, &slice, &printer, &HashMap::new(), &global).unwrap_err();
-        assert_eq!(err, CalcError::MissingFilamentProfile("2".into()));
+        assert_eq!(err, CalcError::MissingMaterialProfile("2".into()));
     }
 
     #[test]

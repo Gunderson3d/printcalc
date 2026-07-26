@@ -30,7 +30,7 @@ pub fn builtin_printers() -> Result<String, JsError> {
     serde_json::to_string(&builtin::printers()).map_err(|e| JsError::new(&e.to_string()))
 }
 
-/// Built-in filament presets, as a JSON array of `FilamentProfile`.
+/// Built-in filament presets, as a JSON array of `MaterialProfile`.
 #[wasm_bindgen]
 pub fn builtin_filaments() -> Result<String, JsError> {
     serde_json::to_string(&builtin::filaments()).map_err(|e| JsError::new(&e.to_string()))

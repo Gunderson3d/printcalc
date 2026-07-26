@@ -14,7 +14,7 @@ use crate::disk::{self, LibraryError};
 use crate::formats::slice_summary::SliceSummary;
 use crate::formats::{self, ParseError};
 use crate::model::cost::{self, CalcError, CostBreakdown};
-use crate::model::filament::FilamentProfile;
+use crate::model::filament::MaterialProfile;
 use crate::model::job::{Job, JobSource, LaborCost, ProfileRef};
 use crate::model::printer::PrinterProfile;
 
@@ -109,7 +109,7 @@ pub fn show_printer(name: &str) -> Result<PrinterProfile, OpsError> {
 
 /// Saves a filament profile to the local library, overwriting any existing
 /// one under the same name.
-pub fn add_filament(profile: &FilamentProfile) -> Result<(), OpsError> {
+pub fn add_filament(profile: &MaterialProfile) -> Result<(), OpsError> {
     Ok(disk::save_filament(profile)?)
 }
 
@@ -129,7 +129,7 @@ pub fn list_filaments() -> Result<Vec<String>, OpsError> {
 /// Loads a filament profile by name — checks the local library first, then
 /// falls back to a built-in preset (see [`crate::builtin`]) under the same
 /// name.
-pub fn show_filament(name: &str) -> Result<FilamentProfile, OpsError> {
+pub fn show_filament(name: &str) -> Result<MaterialProfile, OpsError> {
     match disk::load_filament(name) {
         Ok(profile) => Ok(profile),
         Err(LibraryError::NotFound { .. }) => builtin::filament(name).cloned().ok_or_else(|| {
@@ -241,7 +241,7 @@ pub fn new_job_from_slice(
             profile: Box::new(show_printer(&params.printer_name)?),
         },
     };
-    let filament: HashMap<String, ProfileRef<FilamentProfile>> = params
+    let filament: HashMap<String, ProfileRef<MaterialProfile>> = params
         .filament_names
         .into_iter()
         .map(|(slot, name)| {
@@ -412,8 +412,8 @@ fn resolve_printer(printer_ref: &ProfileRef<PrinterProfile>) -> Result<PrinterPr
 }
 
 fn resolve_filaments(
-    map: &HashMap<String, ProfileRef<FilamentProfile>>,
-) -> Result<HashMap<String, FilamentProfile>, OpsError> {
+    map: &HashMap<String, ProfileRef<MaterialProfile>>,
+) -> Result<HashMap<String, MaterialProfile>, OpsError> {
     map.iter()
         .map(|(slot, r)| {
             let profile = match r {
@@ -579,7 +579,7 @@ mod tests {
             filament: HashMap::from([(
                 SINGLE_FILAMENT_SLOT.to_string(),
                 ProfileRef::Embedded {
-                    profile: Box::new(FilamentProfile {
+                    profile: Box::new(MaterialProfile {
                         name: "resin-grey".into(),
                         kind: MaterialKind::Resin,
                         price_per_kg: None,
@@ -648,7 +648,7 @@ mod tests {
             },
         })
         .unwrap();
-        add_filament(&FilamentProfile {
+        add_filament(&MaterialProfile {
             name: "resin-grey".into(),
             kind: MaterialKind::Resin,
             price_per_kg: None,

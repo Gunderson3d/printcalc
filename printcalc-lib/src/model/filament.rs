@@ -1,4 +1,4 @@
-//! `FilamentProfile` (filament and resin materials).
+//! `MaterialProfile` (filament and resin materials).
 
 use serde::{Deserialize, Serialize};
 
@@ -19,7 +19,7 @@ pub enum MaterialKind {
 /// and referenced from jobs by name (or embedded directly), keyed by slot in
 /// [`super::job::Job::filament`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct FilamentProfile {
+pub struct MaterialProfile {
     /// Also the filename stem it's saved under.
     pub name: String,
     /// Filament or resin.

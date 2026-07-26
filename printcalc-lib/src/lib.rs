@@ -22,7 +22,7 @@
 //! };
 //! use printcalc_lib::disk::GlobalConfig;
 //! use printcalc_lib::model::cost::calculate_cost;
-//! use printcalc_lib::model::filament::{FilamentProfile, MaterialKind};
+//! use printcalc_lib::model::filament::{MaterialKind, MaterialProfile};
 //! use printcalc_lib::model::job::{Job, JobSource, LaborCost, ProfileRef, SINGLE_FILAMENT_SLOT};
 //! use printcalc_lib::model::printer::{PrinterKind, PrinterProfile, WearProfile};
 //!
@@ -58,7 +58,7 @@
 //!         cost_buffer_factor: 1.3,
 //!     },
 //! };
-//! let filament = FilamentProfile {
+//! let filament = MaterialProfile {
 //!     name: "pla-black".to_string(),
 //!     kind: MaterialKind::Filament,
 //!     price_per_kg: Some(18.99),

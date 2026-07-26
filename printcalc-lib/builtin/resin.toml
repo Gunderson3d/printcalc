@@ -1,4 +1,4 @@
-[[filament]]
+[[material]]
 name = "generic-resin-grey"
 kind = "resin"
 price_per_liter = 40.0
