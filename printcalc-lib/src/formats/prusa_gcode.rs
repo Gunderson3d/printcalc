@@ -7,7 +7,7 @@
 //! with [`super::prusa_bgcode`].
 
 use super::slice_summary::{SliceSummary, SourceFormat};
-use super::{prusa_metadata, ParseError, SliceParser};
+use super::{ParseError, SliceParser, prusa_metadata};
 
 /// [`SliceParser`] for PrusaSlicer/OrcaSlicer plain-text `.gcode` — see
 /// the module docs.

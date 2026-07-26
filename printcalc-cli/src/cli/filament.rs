@@ -93,7 +93,7 @@ pub fn run(cmd: FilamentCommand, interactive_mode: bool) -> Result<(), Box<dyn E
                     }
                 }
                 (None, None) => {
-                    return Err("one of --price-per-kg or --price-per-liter is required".into())
+                    return Err("one of --price-per-kg or --price-per-liter is required".into());
                 }
                 other => other,
             };

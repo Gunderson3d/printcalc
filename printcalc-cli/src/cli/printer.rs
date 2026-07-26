@@ -70,7 +70,7 @@ pub fn run(cmd: PrinterCommand, interactive_mode: bool) -> Result<(), Box<dyn Er
                 other => {
                     return Err(
                         format!("invalid --kind {other:?} (expected \"fdm\" or \"resin\")").into(),
-                    )
+                    );
                 }
             };
             let purchase_price = interactive::require_f64(

@@ -178,12 +178,20 @@ impl fmt::Display for CalcError {
                  set the matching price_per_kg/price_per_liter, or set density_g_per_cm3 so the \
                  other price can be converted"
             ),
-            CalcError::PrinterKindMismatch { printer_name, printer_kind, format } => write!(
+            CalcError::PrinterKindMismatch {
+                printer_name,
+                printer_kind,
+                format,
+            } => write!(
                 f,
                 "printer {printer_name:?} is {printer_kind:?}, but {format:?} sliced files are {:?} prints",
                 expected_printer_kind(*format)
             ),
-            CalcError::FilamentKindMismatch { filament_name, filament_kind, format } => write!(
+            CalcError::FilamentKindMismatch {
+                filament_name,
+                filament_kind,
+                format,
+            } => write!(
                 f,
                 "filament profile {filament_name:?} is {filament_kind:?}, but {format:?} sliced files need {:?}",
                 expected_material_kind(*format)
@@ -225,11 +233,13 @@ pub fn calculate_cost(
 
     let selected_plates: Vec<&PlateSummary> = match job.plate_selection {
         None => slice.plates.iter().collect(),
-        Some(i) => vec![slice
-            .plates
-            .iter()
-            .find(|p| p.plate_index == i)
-            .ok_or(CalcError::PlateNotFound(i))?],
+        Some(i) => vec![
+            slice
+                .plates
+                .iter()
+                .find(|p| p.plate_index == i)
+                .ok_or(CalcError::PlateNotFound(i))?,
+        ],
     };
     let total_print_time_seconds: f64 = selected_plates.iter().map(|p| p.print_time_seconds).sum();
 

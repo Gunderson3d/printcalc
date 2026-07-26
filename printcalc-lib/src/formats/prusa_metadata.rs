@@ -23,8 +23,8 @@
 
 use std::collections::HashMap;
 
-use super::slice_summary::{FilamentUsage, PlateSummary, SliceSummary, SourceFormat};
 use super::ParseError;
+use super::slice_summary::{FilamentUsage, PlateSummary, SliceSummary, SourceFormat};
 
 /// Parses `key = value` lines (already stripped of any comment marker)
 /// into a map. Blank lines and lines without `=` are skipped.
