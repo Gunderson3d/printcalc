@@ -1,0 +1,25 @@
+[[printer]]
+name = "bambu-a1"
+kind = "fdm"
+
+[printer.wear]
+purchase_price = 800.0
+additional_upfront_cost = 0.0
+estimated_life_years = 5.0
+estimated_uptime_percent = 0.5
+annual_maintenance_cost = 80.0
+power_consumption_watts = 160.0
+cost_buffer_factor = 1.3
+
+[[printer]]
+name = "generic-resin"
+kind = "resin"
+
+[printer.wear]
+purchase_price = 400.0
+additional_upfront_cost = 0.0
+estimated_life_years = 5.0
+estimated_uptime_percent = 0.3
+annual_maintenance_cost = 20.0
+power_consumption_watts = 60.0
+cost_buffer_factor = 1.2

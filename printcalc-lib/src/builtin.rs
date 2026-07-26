@@ -1,81 +1,71 @@
-//! Built-in printer/filament presets — plain in-memory data, no
-//! filesystem involved, so (unlike [`crate::disk`]) these are available
-//! to `printcalc-wasm` too. [`crate::ops::show_printer`]/[`crate::ops::
-//! show_filament`] (and anything that resolves a `Linked` ref through
-//! them) fall back to these when a name isn't found in the local
-//! library.
+//! Built-in printer/filament presets, embedded at compile time from
+//! `builtin/{printers,filaments,resin}.toml` (via `include_str!`) — plain
+//! data baked into the binary, no filesystem involved at runtime, so
+//! (unlike [`crate::disk`]) these are available to `printcalc-wasm` too.
+//! [`crate::ops::show_printer`]/[`crate::ops::show_filament`] (and
+//! anything that resolves a `Linked` ref through them) fall back to
+//! these when a name isn't found in the local library.
 //!
-//! Starter data — swap in a real catalog.
+//! Starter data — swap in a real catalog by editing those TOML files;
+//! each is an array of profiles (`[[printer]]`/`[[filament]]`), in the
+//! same shape as a profile saved under `~/.config/printcalc/`.
 
-use crate::model::filament::{FilamentProfile, MaterialKind};
-use crate::model::printer::{PrinterKind, PrinterProfile, WearProfile};
+use std::sync::LazyLock;
+
+use serde::Deserialize;
+
+use crate::model::filament::FilamentProfile;
+use crate::model::printer::PrinterProfile;
+
+#[derive(Deserialize)]
+struct PrintersFile {
+    printer: Vec<PrinterProfile>,
+}
+
+#[derive(Deserialize)]
+struct FilamentsFile {
+    filament: Vec<FilamentProfile>,
+}
+
+fn parse_printers(toml_str: &str) -> Vec<PrinterProfile> {
+    toml::from_str::<PrintersFile>(toml_str)
+        .expect("builtin printer TOML is well-formed")
+        .printer
+}
+
+fn parse_filaments(toml_str: &str) -> Vec<FilamentProfile> {
+    toml::from_str::<FilamentsFile>(toml_str)
+        .expect("builtin filament TOML is well-formed")
+        .filament
+}
+
+static PRINTERS: LazyLock<Vec<PrinterProfile>> =
+    LazyLock::new(|| parse_printers(include_str!("../builtin/printers.toml")));
+
+static FILAMENTS: LazyLock<Vec<FilamentProfile>> = LazyLock::new(|| {
+    let mut filaments = parse_filaments(include_str!("../builtin/filaments.toml"));
+    filaments.extend(parse_filaments(include_str!("../builtin/resin.toml")));
+    filaments
+});
 
 /// Every built-in printer preset.
-pub fn printers() -> Vec<PrinterProfile> {
-    vec![
-        PrinterProfile {
-            name: "bambu-a1".to_string(),
-            kind: PrinterKind::Fdm,
-            wear: WearProfile {
-                purchase_price: 800.0,
-                additional_upfront_cost: 0.0,
-                estimated_life_years: 5.0,
-                estimated_uptime_percent: 0.5,
-                annual_maintenance_cost: 80.0,
-                power_consumption_watts: 160.0,
-                cost_buffer_factor: 1.3,
-            },
-        },
-        PrinterProfile {
-            name: "generic-resin".to_string(),
-            kind: PrinterKind::Resin,
-            wear: WearProfile {
-                purchase_price: 400.0,
-                additional_upfront_cost: 0.0,
-                estimated_life_years: 5.0,
-                estimated_uptime_percent: 0.3,
-                annual_maintenance_cost: 20.0,
-                power_consumption_watts: 60.0,
-                cost_buffer_factor: 1.2,
-            },
-        },
-    ]
+pub fn printers() -> &'static [PrinterProfile] {
+    &PRINTERS
 }
 
 /// A built-in printer preset by name.
-pub fn printer(name: &str) -> Option<PrinterProfile> {
-    printers().into_iter().find(|p| p.name == name)
+pub fn printer(name: &str) -> Option<&'static PrinterProfile> {
+    PRINTERS.iter().find(|p| p.name == name)
 }
 
-/// Every built-in filament preset.
-pub fn filaments() -> Vec<FilamentProfile> {
-    vec![
-        FilamentProfile {
-            name: "pla-black".to_string(),
-            kind: MaterialKind::Filament,
-            price_per_kg: Some(18.99),
-            price_per_liter: None,
-            density_g_per_cm3: None,
-            efficiency_factor: 1.1,
-            color: Some("black".to_string()),
-            vendor: None,
-        },
-        FilamentProfile {
-            name: "generic-resin-grey".to_string(),
-            kind: MaterialKind::Resin,
-            price_per_kg: None,
-            price_per_liter: Some(40.0),
-            density_g_per_cm3: None,
-            efficiency_factor: 1.0,
-            color: Some("grey".to_string()),
-            vendor: None,
-        },
-    ]
+/// Every built-in filament preset (filament and resin kinds alike).
+pub fn filaments() -> &'static [FilamentProfile] {
+    &FILAMENTS
 }
 
 /// A built-in filament preset by name.
-pub fn filament(name: &str) -> Option<FilamentProfile> {
-    filaments().into_iter().find(|f| f.name == name)
+pub fn filament(name: &str) -> Option<&'static FilamentProfile> {
+    FILAMENTS.iter().find(|f| f.name == name)
 }
 
 #[cfg(test)]
@@ -84,9 +74,19 @@ mod tests {
 
     #[test]
     fn known_names_resolve_and_unknown_names_dont() {
-        assert_eq!(printer("bambu-a1").unwrap().kind, PrinterKind::Fdm);
+        assert_eq!(
+            printer("bambu-a1").unwrap().kind,
+            crate::model::printer::PrinterKind::Fdm
+        );
         assert!(printer("nonexistent").is_none());
-        assert_eq!(filament("pla-black").unwrap().kind, MaterialKind::Filament);
+        assert_eq!(
+            filament("pla-black").unwrap().kind,
+            crate::model::filament::MaterialKind::Filament
+        );
+        assert_eq!(
+            filament("generic-resin-grey").unwrap().kind,
+            crate::model::filament::MaterialKind::Resin
+        );
         assert!(filament("nonexistent").is_none());
     }
 }

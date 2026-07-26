@@ -1,0 +1,6 @@
+[[filament]]
+name = "generic-resin-grey"
+kind = "resin"
+price_per_liter = 40.0
+efficiency_factor = 1.0
+color = "grey"

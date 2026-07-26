@@ -84,7 +84,7 @@ pub fn list_printers() -> Result<Vec<String>, OpsError> {
     let mut names = disk::list_printers()?;
     for profile in builtin::printers() {
         if !names.contains(&profile.name) {
-            names.push(profile.name);
+            names.push(profile.name.clone());
         }
     }
     names.sort();
@@ -97,7 +97,7 @@ pub fn list_printers() -> Result<Vec<String>, OpsError> {
 pub fn show_printer(name: &str) -> Result<PrinterProfile, OpsError> {
     match disk::load_printer(name) {
         Ok(profile) => Ok(profile),
-        Err(LibraryError::NotFound { .. }) => builtin::printer(name).ok_or_else(|| {
+        Err(LibraryError::NotFound { .. }) => builtin::printer(name).cloned().ok_or_else(|| {
             OpsError::Library(LibraryError::NotFound {
                 kind: "printer",
                 name: name.to_string(),
@@ -119,7 +119,7 @@ pub fn list_filaments() -> Result<Vec<String>, OpsError> {
     let mut names = disk::list_filaments()?;
     for profile in builtin::filaments() {
         if !names.contains(&profile.name) {
-            names.push(profile.name);
+            names.push(profile.name.clone());
         }
     }
     names.sort();
@@ -132,7 +132,7 @@ pub fn list_filaments() -> Result<Vec<String>, OpsError> {
 pub fn show_filament(name: &str) -> Result<FilamentProfile, OpsError> {
     match disk::load_filament(name) {
         Ok(profile) => Ok(profile),
-        Err(LibraryError::NotFound { .. }) => builtin::filament(name).ok_or_else(|| {
+        Err(LibraryError::NotFound { .. }) => builtin::filament(name).cloned().ok_or_else(|| {
             OpsError::Library(LibraryError::NotFound {
                 kind: "filament",
                 name: name.to_string(),
