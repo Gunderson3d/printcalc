@@ -1,14 +1,18 @@
 //! Built-in printer/filament presets, embedded at compile time from
-//! `builtin/{printers,filaments,resin}.toml` (via `include_str!`) — plain
-//! data baked into the binary, no filesystem involved at runtime, so
-//! (unlike [`crate::disk`]) these are available to `printcalc-wasm` too.
+//! `builtin/*.toml` (via `include_str!`) — plain data baked into the
+//! binary, no filesystem involved at runtime, so (unlike [`crate::disk`])
+//! these are available to `printcalc-wasm` too.
 //! [`crate::ops::show_printer`]/[`crate::ops::show_filament`] (and
 //! anything that resolves a `Linked` ref through them) fall back to
 //! these when a name isn't found in the local library.
 //!
-//! Starter data — swap in a real catalog by editing those TOML files;
-//! each is an array of profiles (`[[printer]]`/`[[material]]`), in the
-//! same shape as a profile saved under `~/.config/printcalc/`.
+//! `printers.toml`/`filaments.toml`/`resin.toml` hold vendor-neutral
+//! starter data and are always compiled in. `bambu_printers.toml`/
+//! `bambu_filaments.toml` and `prusa_printers.toml`/`prusa_filaments.toml`
+//! hold real vendor catalogs pulled from each slicer's own system
+//! profiles, gated behind the `bambu`/`prusa` Cargo features (same
+//! features [`crate::formats`] gates its parsers behind) — a build with
+//! only one vendor feature enabled only bakes in that vendor's presets.
 
 use std::sync::LazyLock;
 
@@ -39,12 +43,54 @@ fn parse_filaments(toml_str: &str) -> Vec<MaterialProfile> {
         .material
 }
 
-static PRINTERS: LazyLock<Vec<PrinterProfile>> =
-    LazyLock::new(|| parse_printers(include_str!("../builtin/printers.toml")));
+#[cfg(feature = "bambu")]
+fn bambu_printers() -> Vec<PrinterProfile> {
+    parse_printers(include_str!("../builtin/bambu_printers.toml"))
+}
+#[cfg(not(feature = "bambu"))]
+fn bambu_printers() -> Vec<PrinterProfile> {
+    Vec::new()
+}
+
+#[cfg(feature = "prusa")]
+fn prusa_printers() -> Vec<PrinterProfile> {
+    parse_printers(include_str!("../builtin/prusa_printers.toml"))
+}
+#[cfg(not(feature = "prusa"))]
+fn prusa_printers() -> Vec<PrinterProfile> {
+    Vec::new()
+}
+
+#[cfg(feature = "bambu")]
+fn bambu_filaments() -> Vec<MaterialProfile> {
+    parse_filaments(include_str!("../builtin/bambu_filaments.toml"))
+}
+#[cfg(not(feature = "bambu"))]
+fn bambu_filaments() -> Vec<MaterialProfile> {
+    Vec::new()
+}
+
+#[cfg(feature = "prusa")]
+fn prusa_filaments() -> Vec<MaterialProfile> {
+    parse_filaments(include_str!("../builtin/prusa_filaments.toml"))
+}
+#[cfg(not(feature = "prusa"))]
+fn prusa_filaments() -> Vec<MaterialProfile> {
+    Vec::new()
+}
+
+static PRINTERS: LazyLock<Vec<PrinterProfile>> = LazyLock::new(|| {
+    let mut printers = parse_printers(include_str!("../builtin/printers.toml"));
+    printers.extend(bambu_printers());
+    printers.extend(prusa_printers());
+    printers
+});
 
 static FILAMENTS: LazyLock<Vec<MaterialProfile>> = LazyLock::new(|| {
     let mut filaments = parse_filaments(include_str!("../builtin/filaments.toml"));
     filaments.extend(parse_filaments(include_str!("../builtin/resin.toml")));
+    filaments.extend(bambu_filaments());
+    filaments.extend(prusa_filaments());
     filaments
 });
 
@@ -74,6 +120,7 @@ mod tests {
 
     #[test]
     fn known_names_resolve_and_unknown_names_dont() {
+        #[cfg(feature = "bambu")]
         assert_eq!(
             printer("bambu-a1").unwrap().kind,
             crate::model::printer::PrinterKind::Fdm
@@ -88,5 +135,23 @@ mod tests {
             crate::model::filament::MaterialKind::Resin
         );
         assert!(filament("nonexistent").is_none());
+    }
+
+    #[cfg(all(feature = "bambu", not(feature = "prusa")))]
+    #[test]
+    fn bambu_only_feature_excludes_prusa_builtins() {
+        assert!(printer("bambu-x1-carbon").is_some());
+        assert!(printer("prusa-mk4s").is_none());
+        assert!(filament("bambu-pla-basic").is_some());
+        assert!(filament("prusament-pla").is_none());
+    }
+
+    #[cfg(all(feature = "prusa", not(feature = "bambu")))]
+    #[test]
+    fn prusa_only_feature_excludes_bambu_builtins() {
+        assert!(printer("prusa-mk4s").is_some());
+        assert!(printer("bambu-x1-carbon").is_none());
+        assert!(filament("prusament-pla").is_some());
+        assert!(filament("bambu-pla-basic").is_none());
     }
 }

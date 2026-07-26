@@ -1,0 +1,147 @@
+# --- Bambu Lab printers
+
+[[printer]]
+name = "bambu-a1"
+kind = "fdm"
+
+[printer.wear]
+purchase_price = 800.0
+additional_upfront_cost = 0.0
+estimated_life_years = 5.0
+estimated_uptime_percent = 0.5
+annual_maintenance_cost = 120.0
+power_consumption_watts = 148.3
+cost_buffer_factor = 1.3
+
+
+
+[[printer]]
+name = "bambu-a1-mini"
+kind = "fdm"
+
+[printer.wear]
+purchase_price = 219.00
+additional_upfront_cost = 0.0
+estimated_life_years = 5.0
+estimated_uptime_percent = 0.5
+annual_maintenance_cost = 32.85
+power_consumption_watts = 77.5
+cost_buffer_factor = 1.3
+
+[[printer]]
+name = "bambu-p1p"
+kind = "fdm"
+
+[printer.wear]
+purchase_price = 0.0
+additional_upfront_cost = 0.0
+estimated_life_years = 5.0
+estimated_uptime_percent = 0.5
+annual_maintenance_cost = 0.0
+power_consumption_watts = 146.7
+cost_buffer_factor = 1.3
+
+[[printer]]
+name = "bambu-p1s"
+kind = "fdm"
+
+[printer.wear]
+purchase_price = 579.0
+additional_upfront_cost = 0.0
+estimated_life_years = 5.0
+estimated_uptime_percent = 0.5
+annual_maintenance_cost = 86.85
+power_consumption_watts = 126.7
+cost_buffer_factor = 1.3
+
+[[printer]]
+name = "bambu-p2s"
+kind = "fdm"
+
+[printer.wear]
+purchase_price = 749.00
+additional_upfront_cost = 0.0
+estimated_life_years = 5.0
+estimated_uptime_percent = 0.5
+annual_maintenance_cost = 112.35
+power_consumption_watts = 150.0
+cost_buffer_factor = 1.3
+
+[[printer]]
+name = "bambu-x1"
+kind = "fdm"
+
+[printer.wear]
+purchase_price = 0.0
+additional_upfront_cost = 0.0
+estimated_life_years = 5.0
+estimated_uptime_percent = 0.5
+annual_maintenance_cost = 0.0
+power_consumption_watts = 130.0
+cost_buffer_factor = 1.3
+
+[[printer]]
+name = "bambu-x1-carbon"
+kind = "fdm"
+
+[printer.wear]
+purchase_price = 0.0
+additional_upfront_cost = 0.0
+estimated_life_years = 5.0
+estimated_uptime_percent = 0.5
+annual_maintenance_cost = 0.0
+power_consumption_watts = 130.0
+cost_buffer_factor = 1.3
+
+
+[[printer]]
+name = "bambu-x2d"
+kind = "fdm"
+
+[printer.wear]
+purchase_price = 899.00
+additional_upfront_cost = 0.0
+estimated_life_years = 5.0
+estimated_uptime_percent = 0.5
+annual_maintenance_cost = 134.85
+power_consumption_watts = 400.0
+cost_buffer_factor = 1.3
+
+[[printer]]
+name = "bambu-h2c"
+kind = "fdm"
+
+[printer.wear]
+purchase_price = 2199.00
+additional_upfront_cost = 0.0
+estimated_life_years = 5.0
+estimated_uptime_percent = 0.5
+annual_maintenance_cost = 329.85
+power_consumption_watts = 229.0
+cost_buffer_factor = 1.3
+
+[[printer]]
+name = "bambu-h2d"
+kind = "fdm"
+
+[printer.wear]
+purchase_price = 1749.00
+additional_upfront_cost = 0.0
+estimated_life_years = 5.0
+estimated_uptime_percent = 0.5
+annual_maintenance_cost = 262.35
+power_consumption_watts = 247.3
+cost_buffer_factor = 1.3
+
+[[printer]]
+name = "bambu-h2s"
+kind = "fdm"
+
+[printer.wear]
+purchase_price = 1399.00
+additional_upfront_cost = 0.0
+estimated_life_years = 5.0
+estimated_uptime_percent = 0.5
+annual_maintenance_cost = 209.85
+power_consumption_watts = 236.7
+cost_buffer_factor = 1.3

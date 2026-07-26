@@ -1,0 +1,118 @@
+# --- Prusa printers
+
+[[printer]]
+name = "prusa-mini-plus"
+kind = "fdm"
+
+[printer.wear]
+purchase_price = 459.0
+additional_upfront_cost = 0.0
+estimated_life_years = 5.0
+estimated_uptime_percent = 0.5
+annual_maintenance_cost = 68.85
+power_consumption_watts = 100.0
+cost_buffer_factor = 1.3
+
+[[printer]]
+name = "prusa-mk3s-plus"
+kind = "fdm"
+
+[printer.wear]
+purchase_price = 899.0
+additional_upfront_cost = 0.0
+estimated_life_years = 5.0
+estimated_uptime_percent = 0.5
+annual_maintenance_cost = 134.85
+power_consumption_watts = 120.0
+cost_buffer_factor = 1.3
+
+[[printer]]
+name = "prusa-mk4s"
+kind = "fdm"
+
+[printer.wear]
+purchase_price = 999.00
+additional_upfront_cost = 0.0
+estimated_life_years = 5.0
+estimated_uptime_percent = 0.5
+annual_maintenance_cost = 149.85
+power_consumption_watts = 120.0
+cost_buffer_factor = 1.3
+
+[[printer]]
+name = "prusa-xl"
+kind = "fdm"
+
+[printer.wear]
+purchase_price = 2299.00
+additional_upfront_cost = 0.0
+estimated_life_years = 5.0
+estimated_uptime_percent = 0.5
+annual_maintenance_cost = 344.85
+power_consumption_watts = 235.0
+cost_buffer_factor = 1.3
+
+[[printer]]
+name = "prusa-xl-2n" # the 2 nozzle xl
+kind = "fdm"
+
+[printer.wear]
+purchase_price = 2980.00
+additional_upfront_cost = 0.0
+estimated_life_years = 5.0
+estimated_uptime_percent = 0.5
+annual_maintenance_cost = 447.0
+power_consumption_watts = 235.0
+cost_buffer_factor = 1.3
+
+[[printer]]
+name = "prusa-xl-5n" # the 5 nozzle xl
+kind = "fdm"
+
+[printer.wear]
+purchase_price = 3899.00
+additional_upfront_cost = 0.0
+estimated_life_years = 5.0
+estimated_uptime_percent = 0.5
+annual_maintenance_cost = 584.85
+power_consumption_watts = 235.0
+cost_buffer_factor = 1.3
+
+[[printer]]
+name = "prusa-core-one"
+kind = "fdm"
+
+[printer.wear]
+purchase_price = 1299.00
+additional_upfront_cost = 0.0
+estimated_life_years = 5.0
+estimated_uptime_percent = 0.5
+annual_maintenance_cost = 194.85
+power_consumption_watts = 100.0
+cost_buffer_factor = 1.3
+
+[[printer]]
+name = "prusa-core-one-l"
+kind = "fdm"
+
+[printer.wear]
+purchase_price = 1999.00
+additional_upfront_cost = 0.0
+estimated_life_years = 5.0
+estimated_uptime_percent = 0.5
+annual_maintenance_cost = 299.85
+power_consumption_watts = 100
+cost_buffer_factor = 1.3
+
+[[printer]]
+name = "prusa-sl1s-speed"
+kind = "resin"
+
+[printer.wear]
+purchase_price = 2159.00
+additional_upfront_cost = 0.0
+estimated_life_years = 5.0
+estimated_uptime_percent = 0.5
+annual_maintenance_cost = 323.85
+power_consumption_watts = 100
+cost_buffer_factor = 1.3

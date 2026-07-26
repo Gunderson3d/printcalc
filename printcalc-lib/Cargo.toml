@@ -8,7 +8,7 @@ crate-type = ["cdylib","rlib"]
 [features]
 default = ["bambu", "prusa"]
 
-# Vendor umbrella features: enable every format that vendor's slicer(s) produce.
+# Vendor umbrella features: enable every format that vendor's slicer(s) produce and there are built-in presets.
 bambu = ["bambu-3mf"]
 prusa = ["prusa-gcode", "prusa-sl1", "prusa-bgcode"]
 

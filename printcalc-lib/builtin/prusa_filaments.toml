@@ -1,0 +1,121 @@
+# --- Prusament
+
+[[material]]
+name = "prusament-asa"
+kind = "filament"
+price_per_kg = 35.28
+density_g_per_cm3 = 1.07
+efficiency_factor = 1.1
+vendor = "Prusa Polymers"
+
+[[material]]
+name = "prusament-pa11-cf"
+kind = "filament"
+price_per_kg = 124.99
+density_g_per_cm3 = 1.11
+efficiency_factor = 1.1
+vendor = "Prusa Polymers"
+
+[[material]]
+name = "prusament-pc-blend"
+kind = "filament"
+price_per_kg = 51.53
+density_g_per_cm3 = 1.22
+efficiency_factor = 1.1
+vendor = "Prusa Polymers"
+
+[[material]]
+name = "prusament-pc-blend-cf"
+kind = "filament"
+price_per_kg = 74.99
+density_g_per_cm3 = 1.22
+efficiency_factor = 1.1
+vendor = "Prusa Polymers"
+
+[[material]]
+name = "prusament-petg"
+kind = "filament"
+price_per_kg = 29.99
+density_g_per_cm3 = 1.27
+efficiency_factor = 1.1
+vendor = "Prusa Polymers"
+
+[[material]]
+name = "prusament-petg-cf"
+kind = "filament"
+price_per_kg = 54.99
+density_g_per_cm3 = 1.27
+efficiency_factor = 1.1
+vendor = "Prusa Polymers"
+
+[[material]]
+name = "prusament-petg-magnetite-40"
+kind = "filament"
+price_per_kg = 49.99
+density_g_per_cm3 = 1.82
+efficiency_factor = 1.1
+vendor = "Prusa Polymers"
+
+[[material]]
+name = "prusament-petg-ultraglow"
+kind = "filament"
+price_per_kg = 88.0
+density_g_per_cm3 = 1.5
+efficiency_factor = 1.1
+vendor = "Prusa Polymers"
+
+[[material]]
+name = "prusament-petg-v0-certified"
+kind = "filament"
+price_per_kg = 54.99
+density_g_per_cm3 = 1.27
+efficiency_factor = 1.1
+vendor = "Prusa Polymers"
+
+[[material]]
+name = "prusament-pla"
+kind = "filament"
+price_per_kg = 27.99
+density_g_per_cm3 = 1.24
+efficiency_factor = 1.1
+vendor = "Prusa Polymers"
+
+[[material]]
+name = "prusament-pp-cf"
+kind = "filament"
+price_per_kg = 121.2
+density_g_per_cm3 = 0.91
+efficiency_factor = 1.1
+vendor = "Prusa Polymers"
+
+[[material]]
+name = "prusament-pp-gf"
+kind = "filament"
+price_per_kg = 121.2
+density_g_per_cm3 = 1.05
+efficiency_factor = 1.1
+vendor = "Prusa Polymers"
+
+[[material]]
+name = "prusament-pvb"
+kind = "filament"
+price_per_kg = 49.98
+density_g_per_cm3 = 1.09
+efficiency_factor = 1.1
+vendor = "Prusa Polymers"
+
+[[material]]
+name = "prusament-rpla"
+kind = "filament"
+price_per_kg = 37.49
+density_g_per_cm3 = 1.24
+efficiency_factor = 1.1
+vendor = "Prusa Polymers"
+
+[[material]]
+name = "prusament-woodfill"
+kind = "filament"
+price_per_kg = 39.9
+density_g_per_cm3 = 1.2
+efficiency_factor = 1.1
+vendor = "Prusa Polymers"

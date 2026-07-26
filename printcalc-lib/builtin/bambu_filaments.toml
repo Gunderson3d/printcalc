@@ -1,0 +1,303 @@
+# --- Bambu Lab filaments
+
+
+[[material]]
+name = "bambu-abs"
+kind = "filament"
+price_per_kg = 24.99
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-abs-gf"
+kind = "filament"
+price_per_kg = 29.99
+density_g_per_cm3 = 1.08
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-asa"
+kind = "filament"
+price_per_kg = 31.99
+density_g_per_cm3 = 1.05
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-asa-aero"
+kind = "filament"
+price_per_kg = 49.99
+density_g_per_cm3 = 0.99
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-asa-cf"
+kind = "filament"
+price_per_kg = 36.99
+density_g_per_cm3 = 1.02
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-pa6-cf"
+kind = "filament"
+price_per_kg = 79.99
+density_g_per_cm3 = 1.1
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-pa6-gf"
+kind = "filament"
+price_per_kg = 59.99
+density_g_per_cm3 = 1.14
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-pa-cf"
+kind = "filament"
+price_per_kg = 84.99
+density_g_per_cm3 = 1.09
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-paht-cf"
+kind = "filament"
+price_per_kg = 94.99
+density_g_per_cm3 = 1.06
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-pc"
+kind = "filament"
+price_per_kg = 39.99
+density_g_per_cm3 = 1.185
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-pet-cf"
+kind = "filament"
+price_per_kg = 84.99
+density_g_per_cm3 = 1.29
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-petg-basic"
+kind = "filament"
+price_per_kg = 24.99
+density_g_per_cm3 = 1.25
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-petg-cf"
+kind = "filament"
+price_per_kg = 34.99
+density_g_per_cm3 = 1.25
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-petg-hf"
+kind = "filament"
+price_per_kg = 24.99
+density_g_per_cm3 = 1.28
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-petg-translucent"
+kind = "filament"
+price_per_kg = 24.99
+density_g_per_cm3 = 1.25
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-pla-aero"
+kind = "filament"
+price_per_kg = 44.99
+density_g_per_cm3 = 1.21
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-pla-basic"
+kind = "filament"
+price_per_kg = 24.99
+density_g_per_cm3 = 1.26
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-pla-cf"
+kind = "filament"
+price_per_kg = 34.99
+density_g_per_cm3 = 1.22
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-pla-dynamic"
+kind = "filament"
+price_per_kg = 31.99
+density_g_per_cm3 = 1.26
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-pla-galaxy"
+kind = "filament"
+price_per_kg = 29.99
+density_g_per_cm3 = 1.19
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-pla-glow"
+kind = "filament"
+price_per_kg = 29.99
+density_g_per_cm3 = 1.26
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-pla-marble"
+kind = "filament"
+price_per_kg = 29.99
+density_g_per_cm3 = 1.22
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-pla-matte"
+kind = "filament"
+price_per_kg = 24.99
+density_g_per_cm3 = 1.32
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-pla-metal"
+kind = "filament"
+price_per_kg = 29.99
+density_g_per_cm3 = 1.25
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-pla-pure"
+kind = "filament"
+price_per_kg = 24.99
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-pla-silk"
+kind = "filament"
+price_per_kg = 29.99
+density_g_per_cm3 = 1.32
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-pla-silk-plus"
+kind = "filament"
+price_per_kg = 29.99
+density_g_per_cm3 = 1.27
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-pla-sparkle"
+kind = "filament"
+price_per_kg = 29.99
+density_g_per_cm3 = 1.26
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-pla-tough"
+kind = "filament"
+price_per_kg = 28.99
+density_g_per_cm3 = 1.26
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-pla-tough-plus"
+kind = "filament"
+price_per_kg = 24.99
+density_g_per_cm3 = 1.21
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-pla-translucent"
+kind = "filament"
+price_per_kg = 24.99
+density_g_per_cm3 = 1.22
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-pla-wood"
+kind = "filament"
+price_per_kg = 24.99
+density_g_per_cm3 = 1.21
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-pps-cf"
+kind = "filament"
+price_per_kg = 175.0
+density_g_per_cm3 = 1.26
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-tpu-85a"
+kind = "filament"
+price_per_kg = 44.99
+density_g_per_cm3 = 1.18
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-tpu-90a"
+kind = "filament"
+price_per_kg = 59.99
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-tpu-95a"
+kind = "filament"
+price_per_kg = 41.99
+density_g_per_cm3 = 1.22
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-tpu-95a-hf"
+kind = "filament"
+price_per_kg = 41.99
+density_g_per_cm3 = 1.22
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
+
+[[material]]
+name = "bambu-tpu-for-ams"
+kind = "filament"
+price_per_kg = 38.99
+density_g_per_cm3 = 1.26
+efficiency_factor = 1.1
+vendor = "Bambu Lab"
