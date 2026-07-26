@@ -1,11 +1,4 @@
-//! PrusaSlicer resin `.sl1` / `.sl1s` parser: zip containing `config.ini` /
-//! `config.json`. Both files carry the same data (confirmed against
-//! `Testfiles/Shape-Box.sl1` and `Shape-Box.sl1s`); this parser reads
-//! `config.ini` only since a `key = value` split is all it takes — no
-//! need to also carry a JSON parser for the same numbers.
-//!
-//! Single plate, single vat: no multi-material concept for resin, so
-//! `filament_usage` always has exactly one entry, `slot_id` always `"1"`.
+//! PrusaSlicer resin `.sl1` / `.sl1s` parser.
 
 use std::collections::HashMap;
 use std::io::{Cursor, Read, Seek};

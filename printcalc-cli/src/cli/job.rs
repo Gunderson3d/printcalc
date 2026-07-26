@@ -1,8 +1,4 @@
-//! `printcalc <file> [flags]` — the primary action, not a subcommand: the
-//! `file` positional on the top-level `Cli` (see `main.rs`) dispatches
-//! straight here. A `.toml` path calcs an existing job; anything else is
-//! parsed as a sliced file and turned into one. Arg parsing + printing
-//! only — all real logic is `printcalc_lib::ops::*`.
+//! main logic for parsing and calculating a print job
 
 use std::collections::HashMap;
 use std::error::Error;

@@ -1,7 +1,4 @@
-//! `printcalc config [flags]` — view/set the global defaults (electricity
-//! cost, labor rate, markup percentages) saved to
-//! `~/.config/printcalc/config.toml`. Any flag given updates and saves that
-//! field; with no flags, just shows the current (possibly default) config.
+//! printcalc config command.
 
 use std::error::Error;
 

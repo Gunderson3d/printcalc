@@ -1,11 +1,4 @@
-//! `printcalc filament add/list/show` — arg parsing + printing only; calls
-//! `printcalc_lib::ops::*`.
-//!
-//! `add` is interactive by default: any field not passed as a flag gets
-//! prompted for, unless the top-level `--no-input` was given (see
-//! `crate::interactive`). `edit`/`rm` aren't part of milestone 3's CLI
-//! MVP — add when a milestone actually needs them.
-
+//! filament subcommand
 use std::error::Error;
 
 use clap::{Args, Subcommand};

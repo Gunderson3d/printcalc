@@ -1,9 +1,4 @@
-//! `SliceSummary`: the common shape extracted from any supported slicer
-//! output.
-//!
-//! Always compiled regardless of which parser features are enabled — a
-//! Bundled job (§5) embeds a `SliceSummary` directly and needs no parser at
-//! calc time at all.
+//! `SliceSummary`: the common shape extracted from any supported slicer output.
 
 use std::collections::HashMap;
 

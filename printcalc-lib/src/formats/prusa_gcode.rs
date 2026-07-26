@@ -1,10 +1,4 @@
-//! PrusaSlicer FDM `.gcode` parser: plain text with a slicer-generated
-//! comment footer (`; key = value` / `; key [unit] = value` lines, e.g.
-//! `; estimated printing time (normal mode) = 20m 7s`, `; filament used
-//! [g] = 3.10`, `; filament_type = PLA`). Confirmed against
-//! `Testfiles/Cube_0.2mm_PLA_Prusa MINI_20m7s.gcode`. Shares the key=value
-//! line parsing and `SliceSummary` building in `prusa_metadata` (private)
-//! with [`super::prusa_bgcode`].
+//! PrusaSlicer FDM `.gcode` parser.
 
 use super::slice_summary::{SliceSummary, SourceFormat};
 use super::{ParseError, SliceParser, prusa_metadata};

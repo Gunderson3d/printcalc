@@ -1,10 +1,4 @@
-//! `printcalc printer add/list/show` — arg parsing + printing only; calls
-//! `printcalc_lib::ops::*`.
-//!
-//! `add` is interactive by default: any field not passed as a flag gets
-//! prompted for, unless the top-level `--no-input` was given (see
-//! `crate::interactive`). `edit`/`rm` aren't part of milestone 3's CLI
-//! MVP — add when a milestone actually needs them.
+//! printer subcommand
 
 use std::error::Error;
 
@@ -68,9 +62,10 @@ pub fn run(cmd: PrinterCommand, interactive_mode: bool) -> Result<(), Box<dyn Er
                 "fdm" => PrinterKind::Fdm,
                 "resin" => PrinterKind::Resin,
                 other => {
-                    return Err(
-                        format!("invalid --kind {other:?} (expected \"fdm\" or \"resin\")").into(),
-                    );
+                    return Err(format!(
+                        "invalid --kind {other:?} (expected \"fdm\" or \"resin\")"
+                    )
+                    .into());
                 }
             };
             let purchase_price = interactive::require_f64(

@@ -1,16 +1,4 @@
-//! PrusaSlicer binary G-code (`.bgcode`) parser — the newer default output
-//! format for MK4/MK4S/MINI+/XL firmware.
-//!
-//! Binary block container, magic `GCDE`. Confirmed against
-//! `Testfiles/Shape-Box_0.4n_0.2mm_PLA_MINIIS_24m.bgcode`: the
-//! `PrinterMetadata` block holds the exact same `key=value` text schema as
-//! the plain `.gcode` footer (`filament used [g]=`, `estimated printing
-//! time (normal mode)=`, `printer_model=`, `filament_type=`,
-//! `layer_height=`, ...), just without the `; ` comment prefix or spaces
-//! around `=` — `prusa_metadata::parse_lines` (private) handles both shapes
-//! already (it only trims and splits on `=`). See `prusa_metadata` (private)
-//! for the shared key=value parsing used by both this and
-//! [`super::prusa_gcode`].
+//! PrusaSlicer binary G-code (`.bgcode`) parser.
 
 use binarygcode::{BlockKind, DeserialisedResult, Deserialiser};
 
