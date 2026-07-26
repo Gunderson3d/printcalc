@@ -42,7 +42,7 @@ annual_maintenance_cost = 30.0
 power_consumption_watts = 100.0
 cost_buffer_factor = 1.2
 
-[filament.profile]
+[material.profile]
 name = "prusament-resin-orange"
 kind = "resin"
 price_per_liter = 50.0

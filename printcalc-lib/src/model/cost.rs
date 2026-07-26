@@ -109,7 +109,7 @@ pub enum CalcError {
     /// `job.plate_selection` named a plate that isn't in the sliced file.
     PlateNotFound(u32),
     /// A `FilamentUsage` slot had nonzero usage but no entry in
-    /// `job.filament`.
+    /// `job.material`.
     MissingMaterialProfile(String),
     /// A filament profile had no price in the unit its usage was reported
     /// in (grams or ml), and no `density_g_per_cm3` to convert to the
@@ -202,7 +202,7 @@ pub fn calculate_cost(
     job: &Job,
     slice: &SliceSummary,
     printer: &PrinterProfile,
-    filament_profiles: &HashMap<String, MaterialProfile>,
+    material_profiles: &HashMap<String, MaterialProfile>,
     global: &GlobalConfig,
 ) -> Result<CostBreakdown, CalcError> {
     let format = slice.source_format;
@@ -213,7 +213,7 @@ pub fn calculate_cost(
             format,
         });
     }
-    for profile in filament_profiles.values() {
+    for profile in material_profiles.values() {
         if profile.kind != expected_material_kind(format) {
             return Err(CalcError::FilamentKindMismatch {
                 filament_name: profile.name.clone(),
@@ -253,7 +253,7 @@ pub fn calculate_cost(
     plate_breakdown.sort_by_key(|p| p.plate_index);
 
     let mut material_cost = 0.0;
-    let mut lines_by_filament: HashMap<String, MaterialLine> = HashMap::new();
+    let mut lines_by_material: HashMap<String, MaterialLine> = HashMap::new();
     for plate in &selected_plates {
         for usage in &plate.filament_usage {
             // grams or ml, whichever the usage entry actually carries; a
@@ -267,7 +267,7 @@ pub fn calculate_cost(
                 (None, Some(ml)) => (ml, false),
                 (None, None) => continue,
             };
-            let profile = filament_profiles
+            let profile = material_profiles
                 .get(&usage.slot_id)
                 .ok_or_else(|| CalcError::MissingMaterialProfile(usage.slot_id.clone()))?;
             // Prefer the profile's price in the usage's own unit; if that's
@@ -302,7 +302,7 @@ pub fn calculate_cost(
             let cost = used_amount * (price_per_unit / 1000.0);
             material_cost += cost;
 
-            let line = lines_by_filament
+            let line = lines_by_material
                 .entry(profile.name.clone())
                 .or_insert(MaterialLine {
                     filament_name: profile.name.clone(),
@@ -315,7 +315,7 @@ pub fn calculate_cost(
             line.cost += cost;
         }
     }
-    let mut material_breakdown: Vec<MaterialLine> = lines_by_filament.into_values().collect();
+    let mut material_breakdown: Vec<MaterialLine> = lines_by_material.into_values().collect();
     material_breakdown.sort_by(|a, b| a.filament_name.cmp(&b.filament_name));
 
     let wear = &printer.wear;
@@ -391,7 +391,7 @@ mod tests {
     use super::*;
     use crate::formats::slice_summary::{FilamentUsage, PlateSummary, SourceFormat};
     use crate::model::filament::MaterialKind;
-    use crate::model::job::{HardwareItem, JobSource, LaborCost, ProfileRef, SINGLE_FILAMENT_SLOT};
+    use crate::model::job::{HardwareItem, JobSource, LaborCost, ProfileRef, SINGLE_MATERIAL_SLOT};
     use crate::model::printer::{PrinterKind, WearProfile};
 
     fn bambu_a1() -> PrinterProfile {
@@ -440,7 +440,7 @@ mod tests {
         }
     }
 
-    fn base_job(filament: HashMap<String, ProfileRef<MaterialProfile>>, labor_minutes: f64) -> Job {
+    fn base_job(material: HashMap<String, ProfileRef<MaterialProfile>>, labor_minutes: f64) -> Job {
         Job {
             name: "test".into(),
             source: JobSource::Path("test.gcode.3mf".into()),
@@ -448,7 +448,7 @@ mod tests {
             printer: ProfileRef::Linked {
                 name: "bambu-a1".into(),
             },
-            filament,
+            material,
             material_efficiency_factor_override: None,
             electricity_cost_per_kwh_override: None,
             labor: LaborCost {
@@ -485,7 +485,7 @@ mod tests {
                     plate_index: 1,
                     print_time_seconds: 1037.0,
                     filament_usage: vec![FilamentUsage {
-                        slot_id: SINGLE_FILAMENT_SLOT.into(),
+                        slot_id: SINGLE_MATERIAL_SLOT.into(),
                         material_type: Some("PLA".into()),
                         color: None,
                         grams: Some(6.66),
@@ -499,7 +499,7 @@ mod tests {
                     plate_index: 2,
                     print_time_seconds: 988.0,
                     filament_usage: vec![FilamentUsage {
-                        slot_id: SINGLE_FILAMENT_SLOT.into(),
+                        slot_id: SINGLE_MATERIAL_SLOT.into(),
                         material_type: Some("PLA".into()),
                         color: None,
                         grams: Some(5.15),
@@ -511,13 +511,13 @@ mod tests {
                 },
             ],
         };
-        let filament_profiles = HashMap::from([(
-            SINGLE_FILAMENT_SLOT.to_string(),
+        let material_profiles = HashMap::from([(
+            SINGLE_MATERIAL_SLOT.to_string(),
             filament("pla-black", 18.99),
         )]);
         let job = base_job(
             HashMap::from([(
-                SINGLE_FILAMENT_SLOT.to_string(),
+                SINGLE_MATERIAL_SLOT.to_string(),
                 ProfileRef::Linked {
                     name: "pla-black".into(),
                 },
@@ -528,7 +528,7 @@ mod tests {
         let global = GlobalConfig::default();
 
         let breakdown =
-            calculate_cost(&job, &slice, &printer, &filament_profiles, &global).unwrap();
+            calculate_cost(&job, &slice, &printer, &material_profiles, &global).unwrap();
 
         assert_eq!(
             breakdown.plate_breakdown,
@@ -618,7 +618,7 @@ mod tests {
                 extra: HashMap::new(),
             }],
         };
-        let filament_profiles = HashMap::from([
+        let material_profiles = HashMap::from([
             ("1".to_string(), filament("pla-black", 18.99)),
             ("2".to_string(), filament("pla-red", 18.99)),
             ("4".to_string(), filament("petg-clear", 22.99)),
@@ -650,7 +650,7 @@ mod tests {
         let global = GlobalConfig::default();
 
         let breakdown =
-            calculate_cost(&job, &slice, &printer, &filament_profiles, &global).unwrap();
+            calculate_cost(&job, &slice, &printer, &material_profiles, &global).unwrap();
 
         assert!((breakdown.material_cost - 0.2474).abs() < 1e-3);
         assert_eq!(breakdown.labor_cost, 3.75);
@@ -720,7 +720,7 @@ mod tests {
         };
         let mut job = base_job(
             HashMap::from([(
-                SINGLE_FILAMENT_SLOT.to_string(),
+                SINGLE_MATERIAL_SLOT.to_string(),
                 ProfileRef::Linked {
                     name: "pla-black".into(),
                 },
@@ -742,7 +742,7 @@ mod tests {
                 plate_index: 1,
                 print_time_seconds: 3600.0,
                 filament_usage: vec![FilamentUsage {
-                    slot_id: SINGLE_FILAMENT_SLOT.into(),
+                    slot_id: SINGLE_MATERIAL_SLOT.into(),
                     material_type: None,
                     color: None,
                     grams: None,
@@ -763,10 +763,10 @@ mod tests {
         let slice = resin_slice(10.0);
         let mut profile = resin_priced_per_kg("kg-priced-resin", 40.0);
         profile.density_g_per_cm3 = Some(1.1);
-        let filament_profiles = HashMap::from([(SINGLE_FILAMENT_SLOT.to_string(), profile)]);
+        let material_profiles = HashMap::from([(SINGLE_MATERIAL_SLOT.to_string(), profile)]);
         let job = base_job(
             HashMap::from([(
-                SINGLE_FILAMENT_SLOT.to_string(),
+                SINGLE_MATERIAL_SLOT.to_string(),
                 ProfileRef::Linked {
                     name: "kg-priced-resin".into(),
                 },
@@ -777,7 +777,7 @@ mod tests {
         let global = GlobalConfig::default();
 
         let breakdown =
-            calculate_cost(&job, &slice, &printer, &filament_profiles, &global).unwrap();
+            calculate_cost(&job, &slice, &printer, &material_profiles, &global).unwrap();
 
         // 10ml * 1.1g/ml density = 11g, * 1.1 efficiency factor = 12.1g,
         // * $40/1000 per gram = $0.484.
@@ -790,13 +790,13 @@ mod tests {
     #[test]
     fn ml_usage_without_density_and_without_price_per_liter_is_an_error() {
         let slice = resin_slice(10.0);
-        let filament_profiles = HashMap::from([(
-            SINGLE_FILAMENT_SLOT.to_string(),
+        let material_profiles = HashMap::from([(
+            SINGLE_MATERIAL_SLOT.to_string(),
             resin_priced_per_kg("kg-only-resin", 40.0),
         )]);
         let job = base_job(
             HashMap::from([(
-                SINGLE_FILAMENT_SLOT.to_string(),
+                SINGLE_MATERIAL_SLOT.to_string(),
                 ProfileRef::Linked {
                     name: "kg-only-resin".into(),
                 },
@@ -806,7 +806,7 @@ mod tests {
         let printer = resin_printer();
         let global = GlobalConfig::default();
 
-        let err = calculate_cost(&job, &slice, &printer, &filament_profiles, &global).unwrap_err();
+        let err = calculate_cost(&job, &slice, &printer, &material_profiles, &global).unwrap_err();
         assert_eq!(
             err,
             CalcError::MissingFilamentPrice {
@@ -823,7 +823,7 @@ mod tests {
         let slice = resin_slice(10.0);
         let job = base_job(
             HashMap::from([(
-                SINGLE_FILAMENT_SLOT.to_string(),
+                SINGLE_MATERIAL_SLOT.to_string(),
                 ProfileRef::Linked {
                     name: "pla-basic".into(),
                 },
@@ -847,13 +847,13 @@ mod tests {
     #[test]
     fn filament_kind_against_resin_slice_is_an_error() {
         let slice = resin_slice(10.0);
-        let filament_profiles = HashMap::from([(
-            SINGLE_FILAMENT_SLOT.to_string(),
+        let material_profiles = HashMap::from([(
+            SINGLE_MATERIAL_SLOT.to_string(),
             filament("pla-basic", 20.0),
         )]); // MaterialKind::Filament
         let job = base_job(
             HashMap::from([(
-                SINGLE_FILAMENT_SLOT.to_string(),
+                SINGLE_MATERIAL_SLOT.to_string(),
                 ProfileRef::Linked {
                     name: "pla-basic".into(),
                 },
@@ -863,7 +863,7 @@ mod tests {
         let printer = resin_printer();
         let global = GlobalConfig::default();
 
-        let err = calculate_cost(&job, &slice, &printer, &filament_profiles, &global).unwrap_err();
+        let err = calculate_cost(&job, &slice, &printer, &material_profiles, &global).unwrap_err();
         assert_eq!(
             err,
             CalcError::FilamentKindMismatch {

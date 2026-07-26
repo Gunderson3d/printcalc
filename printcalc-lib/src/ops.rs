@@ -169,7 +169,7 @@ pub struct NewJobParams {
     /// is just a one-entry map — building that one entry under the right
     /// slot_id (not always `"1"`, see
     /// [`SliceSummary::distinct_filament_slots`](crate::formats::slice_summary::SliceSummary::distinct_filament_slots))
-    /// is the caller's job, same as `[filament]` vs `[filaments]` is just
+    /// is the caller's job, same as `[material]` vs `[materials]` is just
     /// two TOML shapes for the same underlying map.
     pub filament_names: HashMap<String, String>,
     /// `None` => every plate; `Some(i)` => just plate `i`.
@@ -241,7 +241,7 @@ pub fn new_job_from_slice(
             profile: Box::new(show_printer(&params.printer_name)?),
         },
     };
-    let filament: HashMap<String, ProfileRef<MaterialProfile>> = params
+    let material: HashMap<String, ProfileRef<MaterialProfile>> = params
         .filament_names
         .into_iter()
         .map(|(slot, name)| {
@@ -264,7 +264,7 @@ pub fn new_job_from_slice(
         source,
         plate_selection,
         printer,
-        filament,
+        material,
         material_efficiency_factor_override: None,
         electricity_cost_per_kwh_override: None,
         labor: LaborCost {
@@ -328,13 +328,13 @@ pub fn calc_job(
 /// `printcalc <slice>` form, no `-o`).
 pub fn calc_job_data(job: &Job, slice: &SliceSummary) -> Result<CostBreakdown, OpsError> {
     let printer = resolve_printer(&job.printer)?;
-    let filament_profiles = resolve_filaments(&job.filament)?;
+    let material_profiles = resolve_materials(&job.material)?;
     let global = disk::load_global_config()?;
     Ok(cost::calculate_cost(
         job,
         slice,
         &printer,
-        &filament_profiles,
+        &material_profiles,
         &global,
     )?)
 }
@@ -360,7 +360,7 @@ pub fn retier_job(job_path: &Path, tier: JobTier) -> Result<Job, OpsError> {
     let printer = ProfileRef::Embedded {
         profile: Box::new(resolve_printer(&job.printer)?),
     };
-    let filament = resolve_filaments(&job.filament)?
+    let material = resolve_materials(&job.material)?
         .into_iter()
         .map(|(slot, profile)| {
             (
@@ -380,7 +380,7 @@ pub fn retier_job(job_path: &Path, tier: JobTier) -> Result<Job, OpsError> {
     Ok(Job {
         source,
         printer,
-        filament,
+        material,
         ..job
     })
 }
@@ -411,7 +411,7 @@ fn resolve_printer(printer_ref: &ProfileRef<PrinterProfile>) -> Result<PrinterPr
     }
 }
 
-fn resolve_filaments(
+fn resolve_materials(
     map: &HashMap<String, ProfileRef<MaterialProfile>>,
 ) -> Result<HashMap<String, MaterialProfile>, OpsError> {
     map.iter()
@@ -430,7 +430,7 @@ mod tests {
     use super::*;
     use crate::formats::slice_summary::{FilamentUsage, PlateSummary, SourceFormat};
     use crate::model::filament::MaterialKind;
-    use crate::model::job::{HardwareItem, SINGLE_FILAMENT_SLOT};
+    use crate::model::job::{HardwareItem, SINGLE_MATERIAL_SLOT};
     use crate::model::printer::{PrinterKind, WearProfile};
 
     fn sl1_fixture_path() -> PathBuf {
@@ -482,7 +482,7 @@ mod tests {
             slice_path: sl1_fixture_path(),
             printer_name: "sl1-printer".into(),
             filament_names: HashMap::from([(
-                SINGLE_FILAMENT_SLOT.to_string(),
+                SINGLE_MATERIAL_SLOT.to_string(),
                 "resin-grey".to_string(),
             )]),
             plate_selection: None,
@@ -502,7 +502,7 @@ mod tests {
             }
         );
         assert_eq!(
-            outcome.job.filament[SINGLE_FILAMENT_SLOT],
+            outcome.job.material[SINGLE_MATERIAL_SLOT],
             ProfileRef::Linked {
                 name: "resin-grey".into()
             }
@@ -518,7 +518,7 @@ mod tests {
             slice_path: sl1_fixture_path(),
             printer_name: "sl1-printer".into(),
             filament_names: HashMap::from([(
-                SINGLE_FILAMENT_SLOT.to_string(),
+                SINGLE_MATERIAL_SLOT.to_string(),
                 "resin-grey".to_string(),
             )]),
             plate_selection: Some(2),
@@ -549,7 +549,7 @@ mod tests {
                     plate_index: 1,
                     print_time_seconds: 3600.0,
                     filament_usage: vec![FilamentUsage {
-                        slot_id: SINGLE_FILAMENT_SLOT.into(),
+                        slot_id: SINGLE_MATERIAL_SLOT.into(),
                         material_type: Some("Resin".into()),
                         color: None,
                         grams: None,
@@ -576,8 +576,8 @@ mod tests {
                     },
                 }),
             },
-            filament: HashMap::from([(
-                SINGLE_FILAMENT_SLOT.to_string(),
+            material: HashMap::from([(
+                SINGLE_MATERIAL_SLOT.to_string(),
                 ProfileRef::Embedded {
                     profile: Box::new(MaterialProfile {
                         name: "resin-grey".into(),
@@ -687,7 +687,7 @@ mod tests {
             slice_path: sl1_fixture_path(),
             printer_name: "sl1-printer".into(),
             filament_names: HashMap::from([(
-                SINGLE_FILAMENT_SLOT.to_string(),
+                SINGLE_MATERIAL_SLOT.to_string(),
                 "resin-grey".to_string(),
             )]),
             plate_selection: None,
@@ -707,7 +707,7 @@ mod tests {
         let bundled = retier_job(&path, JobTier::Bundled).unwrap();
         assert!(matches!(bundled.printer, ProfileRef::Embedded { .. }));
         assert!(matches!(
-            bundled.filament[SINGLE_FILAMENT_SLOT],
+            bundled.material[SINGLE_MATERIAL_SLOT],
             ProfileRef::Embedded { .. }
         ));
         assert!(matches!(bundled.source, JobSource::Embedded(_)));

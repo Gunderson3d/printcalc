@@ -23,7 +23,7 @@
 //! use printcalc_lib::disk::GlobalConfig;
 //! use printcalc_lib::model::cost::calculate_cost;
 //! use printcalc_lib::model::filament::{MaterialKind, MaterialProfile};
-//! use printcalc_lib::model::job::{Job, JobSource, LaborCost, ProfileRef, SINGLE_FILAMENT_SLOT};
+//! use printcalc_lib::model::job::{Job, JobSource, LaborCost, ProfileRef, SINGLE_MATERIAL_SLOT};
 //! use printcalc_lib::model::printer::{PrinterKind, PrinterProfile, WearProfile};
 //!
 //! // Normally the output of `formats::parse_slice_file(bytes, filename)`.
@@ -33,7 +33,7 @@
 //!         plate_index: 1,
 //!         print_time_seconds: 1037.0,
 //!         filament_usage: vec![FilamentUsage {
-//!             slot_id: SINGLE_FILAMENT_SLOT.to_string(),
+//!             slot_id: SINGLE_MATERIAL_SLOT.to_string(),
 //!             material_type: Some("PLA".to_string()),
 //!             color: None,
 //!             grams: Some(6.66),
@@ -74,8 +74,8 @@
 //!     source: JobSource::Embedded(slice.clone()),
 //!     plate_selection: None,
 //!     printer: ProfileRef::Linked { name: "bambu-a1".to_string() },
-//!     filament: HashMap::from([(
-//!         SINGLE_FILAMENT_SLOT.to_string(),
+//!     material: HashMap::from([(
+//!         SINGLE_MATERIAL_SLOT.to_string(),
 //!         ProfileRef::Linked { name: "pla-black".to_string() },
 //!     )]),
 //!     material_efficiency_factor_override: None,
@@ -85,12 +85,12 @@
 //!     markup_percentages_override: None,
 //! };
 //!
-//! // In a real app, `ops::calc_job_data` resolves `job.printer`/`job.filament`
+//! // In a real app, `ops::calc_job_data` resolves `job.printer`/`job.material`
 //! // (which may be `Linked` refs) against the library first; here they're
 //! // already resolved, so `calculate_cost` is called directly.
-//! let filament_profiles = HashMap::from([(SINGLE_FILAMENT_SLOT.to_string(), filament)]);
+//! let material_profiles = HashMap::from([(SINGLE_MATERIAL_SLOT.to_string(), filament)]);
 //! let breakdown =
-//!     calculate_cost(&job, &slice, &printer, &filament_profiles, &GlobalConfig::default())
+//!     calculate_cost(&job, &slice, &printer, &material_profiles, &GlobalConfig::default())
 //!         .expect("printer/filament kinds match the sliced file, and every used slot is priced");
 //! assert!(breakdown.total_cost > 0.0);
 //! ```
