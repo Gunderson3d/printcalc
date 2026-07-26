@@ -8,9 +8,9 @@ use std::path::PathBuf;
 use clap::ValueEnum;
 
 use printcalc_lib::model::cost::CostBreakdown;
-use printcalc_lib::ops::{self, JobTier, NewJobParams};
 
 use crate::interactive;
+use crate::ops::{self, JobTier, NewJobParams};
 
 #[derive(Clone, Copy, ValueEnum)]
 pub enum OutputFormat {

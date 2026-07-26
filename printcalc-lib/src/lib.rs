@@ -1,13 +1,13 @@
 #![warn(missing_docs)]
 //! Core library for calculating 3D print job costs from sliced-file output.
 //!
-//! `printcalc-lib` is the single home for all real logic — slice-file parsing,
-//! cost calculation, profile CRUD, and job-tier conversion. `printcalc-cli` and
-//! `printcalc-wasm` are thin frontends over [`ops`]; they should not need to
-//! contain business logic of their own.
+//! `printcalc-lib` is the single home for all filesystem-free logic —
+//! slice-file parsing, cost calculation, and job-tier data structures.
+//! `printcalc-cli` and `printcalc-wasm` are thin frontends over it; the CLI
+//! additionally owns everything disk-backed (the profile library, job file
+//! I/O, config persistence).
 //!
-//! Real applications will mostly want [`ops`] (parses a sliced file from
-//! disk, resolves profiles against the local library, ...) or
+//! Real applications will mostly want [`ops`] or
 //! [`formats::parse_slice_file`] plus [`model::cost::calculate_cost`]
 //! directly if you're supplying everything in memory (as
 //! `printcalc-wasm` does, with no filesystem to read from). The example
@@ -20,8 +20,7 @@
 //! use printcalc_lib::formats::slice_summary::{
 //!     FilamentUsage, PlateSummary, SliceSummary, SourceFormat,
 //! };
-//! use printcalc_lib::disk::GlobalConfig;
-//! use printcalc_lib::model::cost::calculate_cost;
+//! use printcalc_lib::model::cost::{calculate_cost, CostDefaults};
 //! use printcalc_lib::model::filament::{MaterialKind, MaterialProfile};
 //! use printcalc_lib::model::job::{Job, JobSource, LaborCost, ProfileRef, SINGLE_MATERIAL_SLOT};
 //! use printcalc_lib::model::printer::{PrinterKind, PrinterProfile, WearProfile};
@@ -85,18 +84,17 @@
 //!     markup_percentages_override: None,
 //! };
 //!
-//! // In a real app, `ops::calc_job_data` resolves `job.printer`/`job.material`
-//! // (which may be `Linked` refs) against the library first; here they're
-//! // already resolved, so `calculate_cost` is called directly.
+//! // In a real app, the caller resolves `job.printer`/`job.material`
+//! // (which may be `Linked` refs) first; here they're already resolved,
+//! // so `calculate_cost` is called directly.
 //! let material_profiles = HashMap::from([(SINGLE_MATERIAL_SLOT.to_string(), filament)]);
 //! let breakdown =
-//!     calculate_cost(&job, &slice, &printer, &material_profiles, &GlobalConfig::default())
+//!     calculate_cost(&job, &slice, &printer, &material_profiles, &CostDefaults::default())
 //!         .expect("printer/filament kinds match the sliced file, and every used slot is priced");
 //! assert!(breakdown.total_cost > 0.0);
 //! ```
 
 pub mod builtin;
-pub mod disk;
 pub mod formats;
 pub mod model;
 pub mod ops;

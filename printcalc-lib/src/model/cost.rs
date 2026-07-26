@@ -3,13 +3,38 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::filament::{MaterialKind, MaterialProfile};
 use super::job::Job;
 use super::printer::{PrinterKind, PrinterProfile};
-use crate::disk::GlobalConfig;
 use crate::formats::slice_summary::{PlateSummary, SliceSummary, SourceFormat};
+
+/// Fallback values for job fields left unset — electricity price, labor
+/// rate, markup percentages. Passed to [`calculate_cost`] by the caller,
+/// which owns where they come from (the CLI loads them from
+/// `~/.config/printcalc/config.toml`; anything without a filesystem, like
+/// `printcalc-wasm`, just uses [`CostDefaults::default`]).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CostDefaults {
+    /// Fallback for `Job::electricity_cost_per_kwh_override`.
+    pub electricity_cost_per_kwh: f64,
+    /// Fallback for `LaborCost::rate_per_hour`.
+    pub labor_rate_per_hour: f64,
+    /// Fallback for `Job::markup_percentages_override`. Default `[50.0,
+    /// 60.0, 70.0]`.
+    pub markup_percentages: Vec<f64>,
+}
+
+impl Default for CostDefaults {
+    fn default() -> Self {
+        CostDefaults {
+            electricity_cost_per_kwh: 0.14,
+            labor_rate_per_hour: 15.0,
+            markup_percentages: vec![50.0, 60.0, 70.0],
+        }
+    }
+}
 
 /// The full cost breakdown for a job, returned by [`calculate_cost`].
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -211,7 +236,7 @@ pub fn calculate_cost(
     slice: &SliceSummary,
     printer: &PrinterProfile,
     material_profiles: &HashMap<String, MaterialProfile>,
-    global: &GlobalConfig,
+    defaults: &CostDefaults,
 ) -> Result<CostBreakdown, CalcError> {
     let format = slice.source_format;
     if printer.kind != expected_printer_kind(format) {
@@ -336,7 +361,7 @@ pub fn calculate_cost(
 
     let electricity_rate = job
         .electricity_cost_per_kwh_override
-        .unwrap_or(global.electricity_cost_per_kwh);
+        .unwrap_or(defaults.electricity_cost_per_kwh);
     let electrical_cost_per_hour = (wear.power_consumption_watts / 1000.0) * electricity_rate;
 
     let print_hours = total_print_time_seconds / 3600.0;
@@ -346,7 +371,7 @@ pub fn calculate_cost(
     let effective_labor_rate = job
         .labor
         .rate_per_hour
-        .unwrap_or(global.labor_rate_per_hour);
+        .unwrap_or(defaults.labor_rate_per_hour);
     let labor_cost = effective_labor_rate * (job.labor.minutes / 60.0);
 
     // Explicit loop, not `.sum()`: f64's `Sum` impl folds from -0.0, so an
@@ -373,7 +398,7 @@ pub fn calculate_cost(
     let markup_percentages = job
         .markup_percentages_override
         .as_deref()
-        .unwrap_or(&global.markup_percentages);
+        .unwrap_or(&defaults.markup_percentages);
     let suggested_prices = markup_percentages
         .iter()
         .map(|&markup_percent| SuggestedPrice {
@@ -535,7 +560,7 @@ mod tests {
             10.0,
         );
         let printer = bambu_a1();
-        let global = GlobalConfig::default();
+        let global = CostDefaults::default();
 
         let breakdown =
             calculate_cost(&job, &slice, &printer, &material_profiles, &global).unwrap();
@@ -657,7 +682,7 @@ mod tests {
             15.0,
         );
         let printer = bambu_a1();
-        let global = GlobalConfig::default();
+        let global = CostDefaults::default();
 
         let breakdown =
             calculate_cost(&job, &slice, &printer, &material_profiles, &global).unwrap();
@@ -716,7 +741,7 @@ mod tests {
             1.0,
         );
         let printer = bambu_a1();
-        let global = GlobalConfig::default();
+        let global = CostDefaults::default();
 
         let err = calculate_cost(&job, &slice, &printer, &HashMap::new(), &global).unwrap_err();
         assert_eq!(err, CalcError::MissingMaterialProfile("2".into()));
@@ -739,7 +764,7 @@ mod tests {
         );
         job.plate_selection = Some(3);
         let printer = bambu_a1();
-        let global = GlobalConfig::default();
+        let global = CostDefaults::default();
 
         let err = calculate_cost(&job, &slice, &printer, &HashMap::new(), &global).unwrap_err();
         assert_eq!(err, CalcError::PlateNotFound(3));
@@ -784,7 +809,7 @@ mod tests {
             0.0,
         );
         let printer = resin_printer();
-        let global = GlobalConfig::default();
+        let global = CostDefaults::default();
 
         let breakdown =
             calculate_cost(&job, &slice, &printer, &material_profiles, &global).unwrap();
@@ -814,7 +839,7 @@ mod tests {
             0.0,
         );
         let printer = resin_printer();
-        let global = GlobalConfig::default();
+        let global = CostDefaults::default();
 
         let err = calculate_cost(&job, &slice, &printer, &material_profiles, &global).unwrap_err();
         assert_eq!(
@@ -841,7 +866,7 @@ mod tests {
             0.0,
         );
         let printer = bambu_a1(); // Fdm, but `slice` is PrusaSl1 (resin)
-        let global = GlobalConfig::default();
+        let global = CostDefaults::default();
 
         let err = calculate_cost(&job, &slice, &printer, &HashMap::new(), &global).unwrap_err();
         assert_eq!(
@@ -871,7 +896,7 @@ mod tests {
             0.0,
         );
         let printer = resin_printer();
-        let global = GlobalConfig::default();
+        let global = CostDefaults::default();
 
         let err = calculate_cost(&job, &slice, &printer, &material_profiles, &global).unwrap_err();
         assert_eq!(
@@ -911,7 +936,7 @@ mod tests {
             },
         ];
         let printer = bambu_a1();
-        let global = GlobalConfig::default();
+        let global = CostDefaults::default();
 
         let breakdown = calculate_cost(&job, &slice, &printer, &HashMap::new(), &global).unwrap();
 

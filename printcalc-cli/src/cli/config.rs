@@ -4,8 +4,9 @@ use std::error::Error;
 
 use clap::Args;
 
-use printcalc_lib::disk::GlobalConfig;
-use printcalc_lib::ops;
+use printcalc_lib::model::cost::CostDefaults;
+
+use crate::ops;
 
 #[derive(Args)]
 pub struct ConfigArgs {
@@ -52,7 +53,7 @@ pub fn run(args: ConfigArgs) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn print_config(c: &GlobalConfig) {
+fn print_config(c: &CostDefaults) {
     println!("electricity_cost_per_kwh: {}", c.electricity_cost_per_kwh);
     println!("labor_rate_per_hour: {}", c.labor_rate_per_hour);
     println!("markup_percentages: {:?}", c.markup_percentages);

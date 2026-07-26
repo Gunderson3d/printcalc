@@ -14,6 +14,7 @@
 
 use wasm_bindgen::prelude::*;
 
+use printcalc_lib::model::cost::CostDefaults;
 use printcalc_lib::model::job::JobSource;
 use printcalc_lib::{builtin, formats, ops};
 
@@ -57,6 +58,7 @@ pub fn calc_job(job_toml: &str) -> Result<String, JsError> {
             "job's [source] must be a Bundled `summary`, not a `path` — printcalc-wasm has no filesystem to re-parse a sliced file from",
         ));
     };
-    let breakdown = ops::calc_job_data(&job, slice).map_err(|e| JsError::new(&e.to_string()))?;
+    let breakdown = ops::calc_job_data(&job, slice, &CostDefaults::default())
+        .map_err(|e| JsError::new(&e.to_string()))?;
     serde_json::to_string(&breakdown).map_err(|e| JsError::new(&e.to_string()))
 }

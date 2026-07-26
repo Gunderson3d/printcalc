@@ -578,8 +578,11 @@ name = "printcalc-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "dirs",
  "printcalc-lib",
+ "serde",
  "serde_json",
+ "toml",
 ]
 
 [[package]]
@@ -587,7 +590,6 @@ name = "printcalc-lib"
 version = "0.2.0"
 dependencies = [
  "binarygcode",
- "dirs",
  "serde",
  "serde_json",
  "toml",

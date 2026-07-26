@@ -1,20 +1,21 @@
 //! Profile library load/save (`~/.config/printcalc/{printers,filaments}/*.toml`)
-//! and global config (`~/.config/printcalc/config.toml`).
+//! and config persistence (`~/.config/printcalc/config.toml`).
 //!
-//! Filesystem-only — not available to `printcalc-wasm`, which has no
-//! filesystem and instead receives embedded profiles directly.
+//! CLI-only — `printcalc-lib` is filesystem-free, and `printcalc-wasm` has
+//! no filesystem at all.
 
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
-use crate::model::filament::MaterialProfile;
-use crate::model::printer::PrinterProfile;
+use printcalc_lib::model::cost::CostDefaults;
+use printcalc_lib::model::filament::MaterialProfile;
+use printcalc_lib::model::printer::PrinterProfile;
 
-/// Why a profile library or global config operation failed.
+/// Why a profile library or config operation failed.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum LibraryError {
@@ -49,28 +50,6 @@ impl From<std::io::Error> for LibraryError {
     }
 }
 
-/// `~/.config/printcalc/config.toml`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct GlobalConfig {
-    /// Fallback for `Job::electricity_cost_per_kwh_override`.
-    pub electricity_cost_per_kwh: f64,
-    /// Fallback for `LaborCost::rate_per_hour`.
-    pub labor_rate_per_hour: f64,
-    /// Fallback for `Job::markup_percentages_override`. Default `[50.0,
-    /// 60.0, 70.0]`.
-    pub markup_percentages: Vec<f64>,
-}
-
-impl Default for GlobalConfig {
-    fn default() -> Self {
-        GlobalConfig {
-            electricity_cost_per_kwh: 0.14,
-            labor_rate_per_hour: 15.0,
-            markup_percentages: vec![50.0, 60.0, 70.0],
-        }
-    }
-}
-
 /// `~/.config/printcalc/` (via the `dirs` crate), or `$PRINTCALC_CONFIG_DIR`
 /// if set — an override real users can reach for (a second profile set, a
 /// portable/synced location) and tests use to avoid touching the real
@@ -94,23 +73,22 @@ pub fn filaments_dir() -> PathBuf {
     config_dir().join("filaments")
 }
 
-/// Falls back to [`GlobalConfig::default`] if `config.toml` can't be read
+/// Falls back to [`CostDefaults::default`] if `config.toml` can't be read
 /// — not just missing, *any* read failure. There's no `printcalc config
-/// init` step, so a fresh install (or a platform with no real filesystem
-/// at all, like `printcalc-wasm` in a browser) just works with the
-/// defaults instead of hard-failing every calc.
-pub fn load_global_config() -> Result<GlobalConfig, LibraryError> {
+/// init` step, so a fresh install just works with the defaults instead of
+/// hard-failing every calc.
+pub fn load_config() -> Result<CostDefaults, LibraryError> {
     let path = config_dir().join("config.toml");
     match fs::read_to_string(&path) {
         Ok(text) => toml::from_str(&text).map_err(|e| LibraryError::Toml(e.to_string())),
-        Err(_) => Ok(GlobalConfig::default()),
+        Err(_) => Ok(CostDefaults::default()),
     }
 }
 
 /// Persists `config` to `<config_dir>/config.toml`, creating the config
 /// directory first if it doesn't exist yet (a fresh install has no
 /// `~/.config/printcalc/` at all until something's saved to it).
-pub fn save_global_config(config: &GlobalConfig) -> Result<(), LibraryError> {
+pub fn save_config(config: &CostDefaults) -> Result<(), LibraryError> {
     let dir = config_dir();
     fs::create_dir_all(&dir)?;
     let text = toml::to_string(config).map_err(|e| LibraryError::Toml(e.to_string()))?;
@@ -197,10 +175,10 @@ pub fn list_filaments() -> Result<Vec<String>, LibraryError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::filament::MaterialKind;
+    use printcalc_lib::model::filament::MaterialKind;
 
     fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("printcalc-lib-test-{name}"));
+        let dir = std::env::temp_dir().join(format!("printcalc-cli-test-{name}"));
         let _ = fs::remove_dir_all(&dir);
         dir
     }

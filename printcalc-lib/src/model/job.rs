@@ -79,9 +79,8 @@ pub const SINGLE_MATERIAL_SLOT: &str = "1";
 
 /// A costable print job: which sliced file (or embedded slice data), which
 /// printer/material profiles to price it against, and whatever job-
-/// specific overrides/extras apply. Built via
-/// [`crate::ops::new_job`]/[`crate::ops::new_job_from_slice`], costed via
-/// [`super::cost::calculate_cost`].
+/// specific overrides/extras apply. Costed via
+/// [`super::cost::calculate_cost`] once its refs are resolved.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Job {
     /// A free-form label — not used for anything besides display/output.
