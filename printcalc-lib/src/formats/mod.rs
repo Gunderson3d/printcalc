@@ -19,6 +19,9 @@ pub mod prusa_bgcode;
 #[cfg(any(feature = "prusa-gcode", feature = "prusa-bgcode"))]
 mod prusa_metadata;
 
+#[cfg(any(feature = "bambu-3mf", feature = "prusa-sl1"))]
+mod zip_read;
+
 use slice_summary::SliceSummary;
 
 /// Why a [`SliceParser::parse`] call failed.
@@ -27,9 +30,10 @@ use slice_summary::SliceSummary;
 pub enum ParseError {
     /// Reading the file's bytes failed.
     Io(std::io::Error),
-    /// The zip container (3MF, sl1/sl1s) couldn't be opened.
+    /// The zip container (3MF, sl1/sl1s) couldn't be opened or an entry
+    /// couldn't be inflated.
     #[cfg(any(feature = "bambu-3mf", feature = "prusa-sl1"))]
-    Zip(zip::result::ZipError),
+    Zip(String),
     /// The file doesn't look like this parser's format at all.
     NotThisFormat,
     /// A field this parser needs was missing from the sliced file.
@@ -58,13 +62,6 @@ impl std::error::Error for ParseError {}
 impl From<std::io::Error> for ParseError {
     fn from(e: std::io::Error) -> Self {
         ParseError::Io(e)
-    }
-}
-
-#[cfg(any(feature = "bambu-3mf", feature = "prusa-sl1"))]
-impl From<zip::result::ZipError> for ParseError {
-    fn from(e: zip::result::ZipError) -> Self {
-        ParseError::Zip(e)
     }
 }
 

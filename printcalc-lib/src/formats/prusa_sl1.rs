@@ -1,10 +1,9 @@
 //! PrusaSlicer resin `.sl1` / `.sl1s` parser.
 
 use std::collections::HashMap;
-use std::io::{Cursor, Read, Seek};
 
 use super::slice_summary::{FilamentUsage, PlateSummary, SliceSummary, SourceFormat};
-use super::{ParseError, SliceParser};
+use super::{ParseError, SliceParser, zip_read};
 
 /// [`SliceParser`] for PrusaSlicer resin `.sl1`/`.sl1s` — see the module docs.
 pub struct PrusaSl1;
@@ -19,8 +18,7 @@ impl SliceParser for PrusaSl1 {
     }
 
     fn parse(bytes: &[u8]) -> Result<SliceSummary, ParseError> {
-        let mut archive = zip::ZipArchive::new(Cursor::new(bytes))?;
-        let config = read_config_ini(&mut archive)?;
+        let config = read_config_ini(bytes)?;
 
         let print_time_seconds = required_f64(&config, "printTime")?;
         let used_material_ml = required_f64(&config, "usedMaterial")?;
@@ -49,21 +47,11 @@ impl SliceParser for PrusaSl1 {
 }
 
 fn looks_like_sl1_zip(bytes: &[u8]) -> bool {
-    if !bytes.starts_with(b"PK\x03\x04") {
-        return false;
-    }
-    let Ok(mut archive) = zip::ZipArchive::new(Cursor::new(bytes)) else {
-        return false;
-    };
-    archive.by_name("config.ini").is_ok()
+    zip_read::has_entry(bytes, "config.ini")
 }
 
-fn read_config_ini<R: Read + Seek>(
-    archive: &mut zip::ZipArchive<R>,
-) -> Result<HashMap<String, String>, ParseError> {
-    let mut file = archive.by_name("config.ini")?;
-    let mut text = String::new();
-    file.read_to_string(&mut text)?;
+fn read_config_ini(bytes: &[u8]) -> Result<HashMap<String, String>, ParseError> {
+    let text = zip_read::read_entry_to_string(bytes, "config.ini")?;
     Ok(text
         .lines()
         .filter_map(|line| {

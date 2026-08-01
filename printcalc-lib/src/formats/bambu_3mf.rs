@@ -2,13 +2,13 @@
 
 
 use std::collections::HashMap;
-use std::io::{Cursor, Read, Seek};
+use std::io::Cursor;
 
 use xml::attribute::OwnedAttribute;
 use xml::reader::{EventReader, XmlEvent};
 
 use super::slice_summary::{FilamentUsage, PlateSummary, SliceSummary, SourceFormat};
-use super::{ParseError, SliceParser};
+use super::{ParseError, SliceParser, zip_read};
 
 /// [`SliceParser`] for Bambu Studio `.gcode.3mf` — see the module docs.
 pub struct Bambu3mf;
@@ -22,13 +22,9 @@ impl SliceParser for Bambu3mf {
     }
 
     fn parse(bytes: &[u8]) -> Result<SliceSummary, ParseError> {
-        let mut archive = zip::ZipArchive::new(Cursor::new(bytes))?;
-        let printer_model = read_printer_model(&mut archive);
+        let printer_model = read_printer_model(bytes);
 
-        let mut slice_info = String::new();
-        archive
-            .by_name("Metadata/slice_info.config")?
-            .read_to_string(&mut slice_info)?;
+        let slice_info = zip_read::read_entry_to_string(bytes, "Metadata/slice_info.config")?;
         let plates = parse_slice_info(&slice_info, printer_model.as_deref())?;
 
         Ok(SliceSummary {
@@ -42,26 +38,15 @@ impl SliceParser for Bambu3mf {
 /// `3D/3dmodel.model` — the one entry every 3MF has that a Prusa `.sl1`/
 /// `.sl1s` zip (which has `config.ini` instead) never does.
 fn looks_like_3mf_zip(bytes: &[u8]) -> bool {
-    if !bytes.starts_with(b"PK\x03\x04") {
-        return false;
-    }
-    let Ok(mut archive) = zip::ZipArchive::new(Cursor::new(bytes)) else {
-        return false;
-    };
-    archive.by_name("3D/3dmodel.model").is_ok()
+    zip_read::has_entry(bytes, "3D/3dmodel.model")
 }
 
 /// Best-effort: a human-readable printer name from the project-wide
 /// settings (e.g. "Bambu Lab P2S"). `None` rather than an error if
 /// anything about this is missing or unparseable — it's a nice-to-have
 /// label, not required for costing.
-fn read_printer_model<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -> Option<String> {
-    let mut text = String::new();
-    archive
-        .by_name("Metadata/project_settings.config")
-        .ok()?
-        .read_to_string(&mut text)
-        .ok()?;
+fn read_printer_model(bytes: &[u8]) -> Option<String> {
+    let text = zip_read::read_entry_to_string(bytes, "Metadata/project_settings.config").ok()?;
     let value: serde_json::Value = serde_json::from_str(&text).ok()?;
     value.get("printer_model")?.as_str().map(String::from)
 }
