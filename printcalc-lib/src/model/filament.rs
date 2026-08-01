@@ -24,21 +24,9 @@ pub struct MaterialProfile {
     pub name: String,
     /// Filament or resin.
     pub kind: MaterialKind,
-    /// Price per kilogram — the common case for filament. At least one of
-    /// `price_per_kg`/`price_per_liter` must be set (or reachable via
-    /// `density_g_per_cm3` conversion from the other) for the profile to
-    /// be costable against a given usage.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub price_per_kg: Option<f64>,
-    /// Price per liter — the common case for resin.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub price_per_liter: Option<f64>,
-    /// Grams per cm³ (= grams per ml). Lets [`super::cost::calculate_cost`]
-    /// convert between grams and ml when a usage's unit doesn't match
-    /// whichever price field is set — e.g. a resin priced per kg costed
-    /// against an ml-reported usage.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub density_g_per_cm3: Option<f64>,
+    /// Price per unit of material — per kilogram for
+    /// [`MaterialKind::Filament`], per liter for [`MaterialKind::Resin`].
+    pub price: f64,
     /// Waste/purge multiplier applied to raw usage before pricing (e.g.
     /// `1.1` = price for 10% more than the slicer reported was actually
     /// used).
@@ -49,4 +37,12 @@ pub struct MaterialProfile {
     /// Free-form manufacturer name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vendor: Option<String>,
+}
+
+impl MaterialProfile {
+    /// Serializes this profile to the TOML the profile library saves and
+    /// [`crate::parse_material`] reads back.
+    pub fn to_toml(&self) -> Result<String, toml::ser::Error> {
+        toml::to_string(self)
+    }
 }

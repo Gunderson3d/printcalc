@@ -2,7 +2,6 @@
 name = "generic-resin"
 kind = "resin"
 
-[printer.wear]
 purchase_price = 400.0
 additional_upfront_cost = 0.0
 estimated_life_years = 5.0

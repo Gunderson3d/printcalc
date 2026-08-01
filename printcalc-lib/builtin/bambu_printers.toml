@@ -4,7 +4,6 @@
 name = "bambu-a1"
 kind = "fdm"
 
-[printer.wear]
 purchase_price = 800.0
 additional_upfront_cost = 0.0
 estimated_life_years = 5.0
@@ -19,7 +18,6 @@ cost_buffer_factor = 1.3
 name = "bambu-a1-mini"
 kind = "fdm"
 
-[printer.wear]
 purchase_price = 219.00
 additional_upfront_cost = 0.0
 estimated_life_years = 5.0
@@ -32,7 +30,6 @@ cost_buffer_factor = 1.3
 name = "bambu-p1p"
 kind = "fdm"
 
-[printer.wear]
 purchase_price = 0.0
 additional_upfront_cost = 0.0
 estimated_life_years = 5.0
@@ -45,7 +42,6 @@ cost_buffer_factor = 1.3
 name = "bambu-p1s"
 kind = "fdm"
 
-[printer.wear]
 purchase_price = 579.0
 additional_upfront_cost = 0.0
 estimated_life_years = 5.0
@@ -58,7 +54,6 @@ cost_buffer_factor = 1.3
 name = "bambu-p2s"
 kind = "fdm"
 
-[printer.wear]
 purchase_price = 749.00
 additional_upfront_cost = 0.0
 estimated_life_years = 5.0
@@ -71,7 +66,6 @@ cost_buffer_factor = 1.3
 name = "bambu-x1"
 kind = "fdm"
 
-[printer.wear]
 purchase_price = 0.0
 additional_upfront_cost = 0.0
 estimated_life_years = 5.0
@@ -84,7 +78,6 @@ cost_buffer_factor = 1.3
 name = "bambu-x1-carbon"
 kind = "fdm"
 
-[printer.wear]
 purchase_price = 0.0
 additional_upfront_cost = 0.0
 estimated_life_years = 5.0
@@ -98,7 +91,6 @@ cost_buffer_factor = 1.3
 name = "bambu-x2d"
 kind = "fdm"
 
-[printer.wear]
 purchase_price = 899.00
 additional_upfront_cost = 0.0
 estimated_life_years = 5.0
@@ -111,7 +103,6 @@ cost_buffer_factor = 1.3
 name = "bambu-h2c"
 kind = "fdm"
 
-[printer.wear]
 purchase_price = 2199.00
 additional_upfront_cost = 0.0
 estimated_life_years = 5.0
@@ -124,7 +115,6 @@ cost_buffer_factor = 1.3
 name = "bambu-h2d"
 kind = "fdm"
 
-[printer.wear]
 purchase_price = 1749.00
 additional_upfront_cost = 0.0
 estimated_life_years = 5.0
@@ -137,7 +127,6 @@ cost_buffer_factor = 1.3
 name = "bambu-h2s"
 kind = "fdm"
 
-[printer.wear]
 purchase_price = 1399.00
 additional_upfront_cost = 0.0
 estimated_life_years = 5.0

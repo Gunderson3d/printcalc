@@ -3,20 +3,20 @@
 //!
 //! Everything here touches the filesystem (the profile library, job files,
 //! `config.toml`) — the filesystem-free counterparts (`parse_job`,
-//! in-memory calc) live in `printcalc_lib::ops`.
+//! in-memory calc) live at the `printcalc_lib` root.
 
 use std::collections::HashMap;
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use printcalc_lib::builtin;
 use printcalc_lib::formats::slice_summary::SliceSummary;
 use printcalc_lib::formats::{self, ParseError};
 use printcalc_lib::model::cost::{self, CalcError, CostBreakdown, CostDefaults};
 use printcalc_lib::model::filament::MaterialProfile;
 use printcalc_lib::model::job::{Job, JobSource, LaborCost, ProfileRef};
 use printcalc_lib::model::printer::PrinterProfile;
-use printcalc_lib::{builtin, ops as lib_ops};
 
 use crate::disk::{self, LibraryError};
 
@@ -36,8 +36,8 @@ pub enum OpsError {
     Calc(CalcError),
     /// A profile library or config operation failed.
     Library(LibraryError),
-    /// A filesystem-free `printcalc_lib::ops` call failed.
-    Lib(lib_ops::OpsError),
+    /// A filesystem-free `printcalc_lib` call failed.
+    Lib(printcalc_lib::Error),
 }
 
 impl fmt::Display for OpsError {
@@ -75,8 +75,8 @@ impl From<LibraryError> for OpsError {
         OpsError::Library(e)
     }
 }
-impl From<lib_ops::OpsError> for OpsError {
-    fn from(e: lib_ops::OpsError) -> Self {
+impl From<printcalc_lib::Error> for OpsError {
+    fn from(e: printcalc_lib::Error) -> Self {
         OpsError::Lib(e)
     }
 }
@@ -228,7 +228,7 @@ pub struct NewJobOutcome {
 pub fn parse_slice(path: &Path) -> Result<SliceSummary, OpsError> {
     let bytes = fs::read(path)?;
     let filename = path.file_name().and_then(|f| f.to_str()).unwrap_or("");
-    Ok(formats::parse_slice_file(&bytes, filename)?)
+    Ok(formats::parse_slice_bytes(&bytes, filename)?)
 }
 
 /// Parses `params.slice_path` and builds a [`Job`] at the requested
@@ -304,8 +304,10 @@ pub fn new_job_from_slice(
 }
 
 /// Writes `job` as TOML to `path`, overwriting any existing file there.
+/// Serialized at the lib's [`printcalc_lib::JobTier::Slim`] tier (as-is);
+/// re-tiering is [`retier_job`]'s job, done against the local library.
 pub fn save_job(job: &Job, path: &Path) -> Result<(), OpsError> {
-    let text = toml::to_string(job).map_err(|e| OpsError::Toml(e.to_string()))?;
+    let text = job.to_toml(printcalc_lib::JobTier::Slim)?;
     fs::write(path, text)?;
     Ok(())
 }
@@ -313,7 +315,7 @@ pub fn save_job(job: &Job, path: &Path) -> Result<(), OpsError> {
 /// Reads and parses a job TOML file from disk.
 pub fn load_job(path: &Path) -> Result<Job, OpsError> {
     let text = fs::read_to_string(path)?;
-    Ok(lib_ops::parse_job(&text)?)
+    Ok(printcalc_lib::parse_job(&text)?)
 }
 
 /// Loads the job at `job_path`, resolves its printer/filament refs (against
@@ -415,7 +417,7 @@ fn resolve_slice_summary(job: &Job, job_path: &Path) -> Result<SliceSummary, Ops
             };
             let bytes = fs::read(&resolved)?;
             let filename = resolved.file_name().and_then(|f| f.to_str()).unwrap_or("");
-            Ok(formats::parse_slice_file(&bytes, filename)?)
+            Ok(formats::parse_slice_bytes(&bytes, filename)?)
         }
     }
 }
@@ -598,9 +600,7 @@ mod tests {
                     profile: Box::new(MaterialProfile {
                         name: "resin-grey".into(),
                         kind: MaterialKind::Resin,
-                        price_per_kg: None,
-                        price_per_liter: Some(40.0),
-                        density_g_per_cm3: None,
+                        price: 40.0,
                         efficiency_factor: 1.0,
                         color: None,
                         vendor: None,
@@ -667,9 +667,7 @@ mod tests {
         add_filament(&MaterialProfile {
             name: "resin-grey".into(),
             kind: MaterialKind::Resin,
-            price_per_kg: None,
-            price_per_liter: Some(40.0),
-            density_g_per_cm3: None,
+            price: 40.0,
             efficiency_factor: 1.0,
             color: None,
             vendor: None,

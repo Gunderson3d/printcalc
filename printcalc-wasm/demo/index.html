@@ -16,10 +16,11 @@
 <body>
 <h1>printcalc-wasm demo</h1>
 <p>
-  Exercises the two functions <code>printcalc-wasm</code> exports (SPEC.md §8):
-  <code>parse_slice_file</code> and <code>calc_job</code>. Nothing here touches a
-  filesystem or a profile library — everything is bytes/strings in, JSON out, per
-  <code>SPEC.md</code> §6's "no <code>ref =</code> library resolution" rule for WASM.
+  Mirrors <code>printcalc_lib</code>'s root API in the browser:
+  <code>parse_slice_bytes</code>, <code>parse_job</code>, <code>new_job</code>,
+  <code>calculate</code>, plus the <code>calc_job</code> one-shot (TOML in,
+  breakdown out) and the built-in preset listings. Nothing here touches a
+  filesystem or a profile library — everything is bytes/strings in, JSON out.
 </p>
 
 <section>
@@ -42,7 +43,7 @@
 </section>
 
 <script type="module">
-  import init, { parse_slice_file, calc_job, printcalc_wasm_version } from './pkg/printcalc_wasm.js';
+  import init, { parse_slice_bytes, calc_job, printcalc_wasm_version } from './pkg/printcalc_wasm.js';
 
   await init();
   document.title = `printcalc-wasm demo (v${printcalc_wasm_version()})`;
@@ -54,7 +55,7 @@
     if (!file) return;
     const bytes = new Uint8Array(await file.arrayBuffer());
     try {
-      const summary = JSON.parse(parse_slice_file(bytes, file.name));
+      const summary = JSON.parse(parse_slice_bytes(bytes, file.name));
       sliceOutput.textContent = JSON.stringify(summary, null, 2);
       sliceOutput.classList.remove('error');
     } catch (e) {

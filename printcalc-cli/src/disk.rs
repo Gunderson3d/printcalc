@@ -189,9 +189,7 @@ mod tests {
         let profile = MaterialProfile {
             name: "pla-black".into(),
             kind: MaterialKind::Filament,
-            price_per_kg: Some(18.99),
-            price_per_liter: None,
-            density_g_per_cm3: None,
+            price: 18.99,
             efficiency_factor: 1.1,
             color: Some("black".into()),
             vendor: None,

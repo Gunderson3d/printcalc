@@ -51,6 +51,24 @@ pub enum JobSource {
     Embedded(SliceSummary),
 }
 
+impl From<String> for JobSource {
+    fn from(path: String) -> Self {
+        JobSource::Path(PathBuf::from(path))
+    }
+}
+
+impl From<PathBuf> for JobSource {
+    fn from(path: PathBuf) -> Self {
+        JobSource::Path(path)
+    }
+}
+
+impl From<SliceSummary> for JobSource {
+    fn from(summary: SliceSummary) -> Self {
+        JobSource::Embedded(summary)
+    }
+}
+
 /// Labor cost input for a job. No sensible global default for `minutes` —
 /// unlike `rate_per_hour`, it's always job-specific.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -78,14 +96,13 @@ pub struct HardwareItem {
 pub const SINGLE_MATERIAL_SLOT: &str = "1";
 
 /// A costable print job: which sliced file (or embedded slice data), which
-/// printer/material profiles to price it against, and whatever job-
-/// specific overrides/extras apply. Costed via
-/// [`super::cost::calculate_cost`] once its refs are resolved.
+/// printer/material profiles to price it against, and whatever job-specific overrides/extras apply.
+/// Costed via [`super::cost::calculate_cost`] once its refs are resolved.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Job {
     /// A free-form label — not used for anything besides display/output.
     pub name: String,
-    /// The sliced file this job costs (re-parsed at calc time), or its
+    /// The sliced file this job costs (reparsed at calc time), or its
     /// already-parsed data embedded directly.
     pub source: JobSource,
     /// `None` => every plate; `Some(i)` => just plate `i`.
@@ -108,10 +125,45 @@ pub struct Job {
     pub markup_percentages_override: Option<Vec<f64>>,
 }
 
+/// How much of a job to embed when serializing it with
+/// [`Job::to_toml`]. Serialization only ever goes *up* the tiers
+/// (Linked → Embedded, Path → Embedded summary) — there's no way back
+/// down, since a `Linked` ref's name and a `Path` source's original
+/// location aren't recoverable once resolved away.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum JobTier {
+    /// Serialize as-is: `Linked` refs stay linked, `Embedded` stay
+    /// embedded, the source is untouched.
+    #[default]
+    Slim,
+    /// Printer and every material serialize as [`ProfileRef::Embedded`]
+    /// — `Linked` refs are resolved against the [`crate::builtin`]
+    /// presets. The source is untouched.
+    Full,
+    /// Like [`JobTier::Full`], plus the source becomes
+    /// [`JobSource::Embedded`] — a `Path` source is read and parsed (see
+    /// [`Job::slice_summary`]), so the result is fully self-contained.
+    Bundled,
+}
+
 // Wire format mirrors the TOML shapes used on disk exactly. Hand-rolled
-// (De)Serialize on Job instead of a derive, since "exactly one of
+// (De)Serialize on Job instead of a derived, since "exactly one of
 // `path`/`summary`" and "exactly one of `material`/`materials`" can't be
 // expressed by derive alone.
+
+impl Job {
+    /// Maps `slot` (see [`crate::formats::slice_summary::FilamentUsage::slot_id`])
+    /// to `material`, replacing any previous entry for that slot.
+    pub fn add_material(&mut self, slot: impl Into<String>, material: ProfileRef<MaterialProfile>) {
+        self.material.insert(slot.into(), material);
+    }
+
+    /// Appends a flat per-piece extra cost (inserts, magnets, ...) to this
+    /// job's hardware list.
+    pub fn add_hardware(&mut self, item: HardwareItem) {
+        self.hardware.push(item);
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
@@ -360,7 +412,6 @@ grams = 6.66
 [printer.profile]
 name = "bambu-a1"
 kind = "fdm"
-[printer.profile.wear]
 purchase_price = 800.0
 additional_upfront_cost = 0.0
 estimated_life_years = 5.0
@@ -372,7 +423,7 @@ cost_buffer_factor = 1.3
 [material.profile]
 name = "pla-black"
 kind = "filament"
-price_per_kg = 18.99
+price = 18.99
 efficiency_factor = 1.1
 
 [labor]
@@ -392,6 +443,74 @@ minutes = 10.0
 
         let round_tripped: Job = toml::from_str(&toml::to_string(&job).unwrap()).unwrap();
         assert_eq!(round_tripped, job);
+    }
+
+    /// `add_material`/`add_hardware` build the same structures the TOML
+    /// maps onto, and `to_toml` round-trips through `parse_job`'s format.
+    #[test]
+    fn job_helpers_build_and_round_trip() {
+        let mut job: Job = toml::from_str(
+            r#"
+name = "widget"
+
+[source]
+path = "prints/widget.gcode.3mf"
+
+[printer]
+ref = "bambu-a1"
+
+[material]
+ref = "pla-black"
+
+[labor]
+minutes = 10.0
+"#,
+        )
+        .unwrap();
+
+        job.add_material(
+            "2",
+            ProfileRef::Linked {
+                name: "pla-red".into(),
+            },
+        );
+        assert_eq!(
+            job.material.get("2"),
+            Some(&ProfileRef::Linked {
+                name: "pla-red".into()
+            })
+        );
+        job.add_hardware(HardwareItem {
+            name: "brass insert M3x5".into(),
+            cost: 0.12,
+            quantity: 4,
+        });
+        assert_eq!(job.hardware.len(), 1);
+
+        let round_tripped: Job = toml::from_str(&job.to_toml(JobTier::Slim).unwrap()).unwrap();
+        assert_eq!(round_tripped, job);
+    }
+
+    /// `JobSource` accepts the `new_job` source argument's either-shape:
+    /// a path (`String`/`PathBuf`) or an already-parsed `SliceSummary`.
+    #[test]
+    fn job_source_from_impls_cover_path_and_summary() {
+        assert_eq!(
+            JobSource::from("prints/widget.gcode".to_string()),
+            JobSource::Path("prints/widget.gcode".into())
+        );
+        assert_eq!(
+            JobSource::from(PathBuf::from("prints/widget.gcode")),
+            JobSource::Path("prints/widget.gcode".into())
+        );
+        let summary = SliceSummary {
+            source_format: crate::formats::slice_summary::SourceFormat::Bambu3mf,
+            plates: vec![],
+        };
+        assert_eq!(
+            JobSource::from(summary.clone()),
+            JobSource::Embedded(summary)
+        );
     }
 
     #[test]

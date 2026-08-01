@@ -92,12 +92,12 @@ pub struct MaterialLine {
     pub filament_name: String,
     /// Total amount used (after the efficiency factor), in `unit`.
     pub amount: f64,
-    /// "g" or "ml" — whichever unit `unit_price` is denominated in (the
-    /// usage's own unit, or the other one if priced via a
-    /// `density_g_per_cm3` conversion).
+    /// "g" or "ml" — whichever unit the sliced file reported the usage in
+    /// (grams for FDM formats, ml for resin).
     pub unit: &'static str,
-    /// Price per 1000 `unit` (i.e. `price_per_kg`/`price_per_liter` as
-    /// applied) — the profile's own price, not multiplied by `amount`.
+    /// Price per 1000 `unit` — the profile's own
+    /// [`super::filament::MaterialProfile::price`] (per kg for filament,
+    /// per liter for resin), not multiplied by `amount`.
     pub unit_price: f64,
     /// `amount` priced at `unit_price`.
     pub cost: f64,
@@ -136,15 +136,6 @@ pub enum CalcError {
     /// A `FilamentUsage` slot had nonzero usage but no entry in
     /// `job.material`.
     MissingMaterialProfile(String),
-    /// A filament profile had no price in the unit its usage was reported
-    /// in (grams or ml), and no `density_g_per_cm3` to convert to the
-    /// other unit it does have a price for.
-    MissingFilamentPrice {
-        /// The filament profile's name.
-        name: String,
-        /// `"grams"` or `"ml"`.
-        usage_unit: &'static str,
-    },
     /// `printer.kind` doesn't match what the sliced file's format implies
     /// (e.g. a resin `.sl1s` costed against an FDM printer profile).
     /// Caught up front so it doesn't surface later as a confusing
@@ -197,12 +188,6 @@ impl fmt::Display for CalcError {
             CalcError::MissingMaterialProfile(slot) => {
                 write!(f, "no filament profile mapped for slot {slot}")
             }
-            CalcError::MissingFilamentPrice { name, usage_unit } => write!(
-                f,
-                "filament profile {name:?} has no price for its usage (reported in {usage_unit}) — \
-                 set the matching price_per_kg/price_per_liter, or set density_g_per_cm3 so the \
-                 other price can be converted"
-            ),
             CalcError::PrinterKindMismatch {
                 printer_name,
                 printer_kind,
@@ -294,47 +279,30 @@ pub fn calculate_cost(
             // grams or ml, whichever the usage entry actually carries; a
             // slot with zero of both is present but unused (Bambu AMS tray
             // / Prusa extruder not loaded) and is skipped.
-            let (native_amount, want_grams) = match (
+            let native_amount = match (
                 usage.grams.filter(|&g| g != 0.0),
                 usage.ml.filter(|&m| m != 0.0),
             ) {
-                (Some(g), _) => (g, true),
-                (None, Some(ml)) => (ml, false),
+                (Some(g), _) => g,
+                (None, Some(ml)) => ml,
                 (None, None) => continue,
             };
             let profile = material_profiles
                 .get(&usage.slot_id)
                 .ok_or_else(|| CalcError::MissingMaterialProfile(usage.slot_id.clone()))?;
-            // Prefer the profile's price in the usage's own unit; if that's
-            // missing, fall back to converting the amount via
-            // density_g_per_cm3 (1 ml = 1 cm3, so grams = ml * density) and
-            // pricing it in the profile's other unit instead.
-            let (amount, unit, price_per_unit) = match (
-                want_grams,
-                profile.price_per_kg,
-                profile.price_per_liter,
-                profile.density_g_per_cm3,
-            ) {
-                (true, Some(price), ..) => (native_amount, "g", price),
-                (false, _, Some(price), _) => (native_amount, "ml", price),
-                (true, None, Some(price_per_liter), Some(density)) => {
-                    (native_amount / density, "ml", price_per_liter)
-                }
-                (false, Some(price_per_kg), None, Some(density)) => {
-                    (native_amount * density, "g", price_per_kg)
-                }
-                _ => {
-                    return Err(CalcError::MissingFilamentPrice {
-                        name: profile.name.clone(),
-                        usage_unit: if want_grams { "grams" } else { "ml" },
-                    });
-                }
+            // The profile's kind fixes the usage's unit and the price's
+            // basis (per kg for filament, per liter for resin) — the
+            // up-front kind checks above guarantee they match the sliced
+            // file's format, so no unit conversion is ever needed.
+            let unit = match profile.kind {
+                MaterialKind::Filament => "g",
+                MaterialKind::Resin => "ml",
             };
             let effective_factor = job
                 .material_efficiency_factor_override
                 .unwrap_or(profile.efficiency_factor);
-            let used_amount = amount * effective_factor;
-            let cost = used_amount * (price_per_unit / 1000.0);
+            let used_amount = native_amount * effective_factor;
+            let cost = used_amount * (profile.price / 1000.0);
             material_cost += cost;
 
             let line = lines_by_material
@@ -343,7 +311,7 @@ pub fn calculate_cost(
                     filament_name: profile.name.clone(),
                     amount: 0.0,
                     unit,
-                    unit_price: price_per_unit,
+                    unit_price: profile.price,
                     cost: 0.0,
                 });
             line.amount += used_amount;
@@ -445,13 +413,11 @@ mod tests {
         }
     }
 
-    fn filament(name: &str, price_per_kg: f64) -> MaterialProfile {
+    fn filament(name: &str, price: f64) -> MaterialProfile {
         MaterialProfile {
             name: name.into(),
             kind: MaterialKind::Filament,
-            price_per_kg: Some(price_per_kg),
-            price_per_liter: None,
-            density_g_per_cm3: None,
+            price,
             efficiency_factor: 1.1,
             color: None,
             vendor: None,
@@ -466,12 +432,11 @@ mod tests {
         }
     }
 
-    /// Like [`filament`], but `kind: Resin` and priced per kg instead of
-    /// per liter — used to test the density-conversion fallback.
-    fn resin_priced_per_kg(name: &str, price_per_kg: f64) -> MaterialProfile {
+    /// Like [`filament`], but `kind: Resin` and priced per liter.
+    fn resin(name: &str, price: f64) -> MaterialProfile {
         MaterialProfile {
             kind: MaterialKind::Resin,
-            ..filament(name, price_per_kg)
+            ..filament(name, price)
         }
     }
 
@@ -790,20 +755,18 @@ mod tests {
         }
     }
 
-    /// A ml-reported usage against a profile that only has `price_per_kg`,
-    /// but does have `density_g_per_cm3`, should still price via
-    /// conversion instead of erroring.
+    /// A ml-reported resin usage prices straight off the profile's
+    /// per-liter price — no unit conversion involved.
     #[test]
-    fn ml_usage_converts_via_density_when_only_price_per_kg_is_set() {
+    fn ml_usage_is_priced_per_liter() {
         let slice = resin_slice(10.0);
-        let mut profile = resin_priced_per_kg("kg-priced-resin", 40.0);
-        profile.density_g_per_cm3 = Some(1.1);
-        let material_profiles = HashMap::from([(SINGLE_MATERIAL_SLOT.to_string(), profile)]);
+        let material_profiles =
+            HashMap::from([(SINGLE_MATERIAL_SLOT.to_string(), resin("grey-resin", 40.0))]);
         let job = base_job(
             HashMap::from([(
                 SINGLE_MATERIAL_SLOT.to_string(),
                 ProfileRef::Linked {
-                    name: "kg-priced-resin".into(),
+                    name: "grey-resin".into(),
                 },
             )]),
             0.0,
@@ -814,41 +777,11 @@ mod tests {
         let breakdown =
             calculate_cost(&job, &slice, &printer, &material_profiles, &global).unwrap();
 
-        // 10ml * 1.1g/ml density = 11g, * 1.1 efficiency factor = 12.1g,
-        // * $40/1000 per gram = $0.484.
-        assert!((breakdown.material_cost - 0.484).abs() < 1e-9);
-    }
-
-    /// Same mismatch, but with no `density_g_per_cm3` to bridge the units —
-    /// this is exactly what a real user hit: a filament profile with only
-    /// `price_per_kg` used against a resin (`.sl1s`, ml-reported) job.
-    #[test]
-    fn ml_usage_without_density_and_without_price_per_liter_is_an_error() {
-        let slice = resin_slice(10.0);
-        let material_profiles = HashMap::from([(
-            SINGLE_MATERIAL_SLOT.to_string(),
-            resin_priced_per_kg("kg-only-resin", 40.0),
-        )]);
-        let job = base_job(
-            HashMap::from([(
-                SINGLE_MATERIAL_SLOT.to_string(),
-                ProfileRef::Linked {
-                    name: "kg-only-resin".into(),
-                },
-            )]),
-            0.0,
-        );
-        let printer = resin_printer();
-        let global = CostDefaults::default();
-
-        let err = calculate_cost(&job, &slice, &printer, &material_profiles, &global).unwrap_err();
-        assert_eq!(
-            err,
-            CalcError::MissingFilamentPrice {
-                name: "kg-only-resin".into(),
-                usage_unit: "ml"
-            }
-        );
+        // 10ml * 1.1 efficiency factor * $40/1000 per ml = $0.44.
+        assert!((breakdown.material_cost - 0.44).abs() < 1e-9);
+        let line = &breakdown.material_breakdown[0];
+        assert_eq!(line.unit, "ml");
+        assert_eq!(line.unit_price, 40.0);
     }
 
     /// The exact scenario a real user hit: an FDM printer profile costed

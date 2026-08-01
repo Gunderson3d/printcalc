@@ -29,9 +29,15 @@ cargo add printcalc-lib --no-default-features --features prusa-sl1
 
 See the crate-level doc example (`cargo doc --open -p printcalc-lib`, or
 the top of `src/lib.rs`) for a runnable end-to-end example of the core
-`calculate_cost` path. For a real application reading actual files,
-[`ops`] is the entry point — it handles parsing, profile-library
-resolution, and job (de)serialization together.
+`calculate_cost` path. For a real application, the crate-root functions
+are the entry points: `parse_slice_bytes`/`parse_job`/`parse_printer`/
+`parse_material` for in-memory data,
+`read_slice_file`/`read_job`/`read_printer`/`read_material` for loading
+straight from disk (read-only — saving stays in `printcalc-cli`),
+`create_printer`/`create_material` to build profiles in code,
+`new_job` to build a job from a sliced-file path (or an embedded slice
+summary) and a printer profile, and `calculate` to cost a job — all
+re-exported at the root alongside the model types they operate on.
 
 ## Multi-plate / multi-filament
 
@@ -42,8 +48,8 @@ IDEX) is priced per slot against its own filament profile — see
 
 ## No filesystem? No problem
 
-`formats::parse_slice_file` and `model::cost::calculate_cost` do no I/O of
-their own — pass bytes/data in, get a result out. `library`/`ops`'s
-filesystem-backed functions (profile library, job load/save) are the only
-parts that assume a real filesystem; `printcalc-wasm` skips them entirely
-and calls the pure functions directly.
+`parse_slice_bytes` and `calculate_cost` do no I/O of
+their own — pass bytes/data in, get a result out. Only the `read_*`
+helpers in `disk` touch the filesystem, and they only read;
+`printcalc-wasm` skips them entirely and calls the pure functions
+directly.

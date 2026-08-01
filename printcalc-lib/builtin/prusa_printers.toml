@@ -4,7 +4,6 @@
 name = "prusa-mini-plus"
 kind = "fdm"
 
-[printer.wear]
 purchase_price = 459.0
 additional_upfront_cost = 0.0
 estimated_life_years = 5.0
@@ -17,7 +16,6 @@ cost_buffer_factor = 1.3
 name = "prusa-mk3s-plus"
 kind = "fdm"
 
-[printer.wear]
 purchase_price = 899.0
 additional_upfront_cost = 0.0
 estimated_life_years = 5.0
@@ -30,7 +28,6 @@ cost_buffer_factor = 1.3
 name = "prusa-mk4s"
 kind = "fdm"
 
-[printer.wear]
 purchase_price = 999.00
 additional_upfront_cost = 0.0
 estimated_life_years = 5.0
@@ -43,7 +40,6 @@ cost_buffer_factor = 1.3
 name = "prusa-xl"
 kind = "fdm"
 
-[printer.wear]
 purchase_price = 2299.00
 additional_upfront_cost = 0.0
 estimated_life_years = 5.0
@@ -56,7 +52,6 @@ cost_buffer_factor = 1.3
 name = "prusa-xl-2n" # the 2 nozzle xl
 kind = "fdm"
 
-[printer.wear]
 purchase_price = 2980.00
 additional_upfront_cost = 0.0
 estimated_life_years = 5.0
@@ -69,7 +64,6 @@ cost_buffer_factor = 1.3
 name = "prusa-xl-5n" # the 5 nozzle xl
 kind = "fdm"
 
-[printer.wear]
 purchase_price = 3899.00
 additional_upfront_cost = 0.0
 estimated_life_years = 5.0
@@ -82,7 +76,6 @@ cost_buffer_factor = 1.3
 name = "prusa-core-one"
 kind = "fdm"
 
-[printer.wear]
 purchase_price = 1299.00
 additional_upfront_cost = 0.0
 estimated_life_years = 5.0
@@ -95,7 +88,6 @@ cost_buffer_factor = 1.3
 name = "prusa-core-one-l"
 kind = "fdm"
 
-[printer.wear]
 purchase_price = 1999.00
 additional_upfront_cost = 0.0
 estimated_life_years = 5.0
@@ -108,7 +100,6 @@ cost_buffer_factor = 1.3
 name = "prusa-sl1s-speed"
 kind = "resin"
 
-[printer.wear]
 purchase_price = 2159.00
 additional_upfront_cost = 0.0
 estimated_life_years = 5.0

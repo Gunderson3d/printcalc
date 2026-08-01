@@ -22,7 +22,9 @@ pub struct PrinterProfile {
     pub name: String,
     /// FDM or resin.
     pub kind: PrinterKind,
-    /// Depreciation and running-cost inputs.
+    /// Depreciation and running-cost inputs — flattened, so its keys sit
+    /// at the profile's top level in TOML (no `[wear]` table).
+    #[serde(flatten)]
     pub wear: WearProfile,
 }
 
@@ -47,4 +49,12 @@ pub struct WearProfile {
     /// Multiplier applied to the computed wear/electricity rate — a safety
     /// margin over the raw depreciation math.
     pub cost_buffer_factor: f64,
+}
+
+impl PrinterProfile {
+    /// Serializes this profile to the TOML the profile library saves and
+    /// [`crate::parse_printer`] reads back.
+    pub fn to_toml(&self) -> Result<String, toml::ser::Error> {
+        toml::to_string(self)
+    }
 }

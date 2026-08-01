@@ -1,7 +1,7 @@
 //! Built-in printer/filament presets, embedded at compile time from
 //! `builtin/*.toml` (via `include_str!`) — plain data baked into the
 //! binary, no filesystem involved at runtime, so these are available to
-//! `printcalc-wasm` too. [`crate::ops::calc_job_data`] (and anything that
+//! `printcalc-wasm` too. [`crate::calculate`] (and anything that
 //! resolves a `Linked` ref through it) falls back to these when a name
 //! isn't an embedded profile; the CLI additionally checks its on-disk
 //! profile library first.

@@ -22,12 +22,9 @@ pub enum FilamentCommand {
         /// "filament" or "resin".
         #[arg(short, long, default_value = "filament")]
         kind: String,
-        #[arg(long = "price-per-kg")]
-        price_per_kg: Option<f64>,
-        #[arg(long = "price-per-liter")]
-        price_per_liter: Option<f64>,
-        #[arg(long = "density")]
-        density_g_per_cm3: Option<f64>,
+        /// Price per kg (filament) or per liter (resin).
+        #[arg(long)]
+        price: Option<f64>,
         #[arg(long = "efficiency-factor", default_value_t = 1.1)]
         efficiency_factor: f64,
         #[arg(long)]
@@ -46,9 +43,7 @@ pub fn run(cmd: FilamentCommand, interactive_mode: bool) -> Result<(), Box<dyn E
         FilamentCommand::Add {
             name,
             kind,
-            price_per_kg,
-            price_per_liter,
-            density_g_per_cm3,
+            price,
             efficiency_factor,
             color,
             vendor,
@@ -65,37 +60,20 @@ pub fn run(cmd: FilamentCommand, interactive_mode: bool) -> Result<(), Box<dyn E
                     .into());
                 }
             };
-            let (price_per_kg, price_per_liter) = match (price_per_kg, price_per_liter) {
-                (None, None) if interactive_mode => {
-                    let kg = interactive::optional_f64(
-                        None,
-                        "Price per kg (blank to enter price per liter instead)",
-                        true,
-                    )?;
-                    match kg {
-                        Some(v) => (Some(v), None),
-                        None => (
-                            None,
-                            Some(interactive::require_f64(
-                                None,
-                                "price-per-liter",
-                                "Price per liter",
-                                true,
-                            )?),
-                        ),
-                    }
-                }
-                (None, None) => {
-                    return Err("one of --price-per-kg or --price-per-liter is required".into());
-                }
-                other => other,
+            let price_unit = match kind {
+                MaterialKind::Filament => "kg",
+                MaterialKind::Resin => "liter",
             };
+            let price = interactive::require_f64(
+                price,
+                "price",
+                &format!("Price per {price_unit}"),
+                interactive_mode,
+            )?;
             let profile = MaterialProfile {
                 name: name.clone(),
                 kind,
-                price_per_kg,
-                price_per_liter,
-                density_g_per_cm3,
+                price,
                 efficiency_factor,
                 color,
                 vendor,
@@ -121,15 +99,11 @@ pub fn run(cmd: FilamentCommand, interactive_mode: bool) -> Result<(), Box<dyn E
 fn print_filament(f: &MaterialProfile) {
     println!("name: {}", f.name);
     println!("kind: {:?}", f.kind);
-    if let Some(p) = f.price_per_kg {
-        println!("price_per_kg: {p}");
-    }
-    if let Some(p) = f.price_per_liter {
-        println!("price_per_liter: {p}");
-    }
-    if let Some(d) = f.density_g_per_cm3 {
-        println!("density_g_per_cm3: {d}");
-    }
+    let price_unit = match f.kind {
+        MaterialKind::Filament => "kg",
+        MaterialKind::Resin => "liter",
+    };
+    println!("price: {} per {price_unit}", f.price);
     println!("efficiency_factor: {}", f.efficiency_factor);
     if let Some(c) = &f.color {
         println!("color: {c}");

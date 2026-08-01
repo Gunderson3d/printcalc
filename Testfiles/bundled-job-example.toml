@@ -32,8 +32,6 @@ ml = 2.457665
 [printer.profile]
 name = "sl1s-printer"
 kind = "resin"
-
-[printer.profile.wear]
 purchase_price = 550.0
 additional_upfront_cost = 0.0
 estimated_life_years = 5.0
@@ -45,7 +43,7 @@ cost_buffer_factor = 1.2
 [material.profile]
 name = "prusament-resin-orange"
 kind = "resin"
-price_per_liter = 50.0
+price = 50.0
 efficiency_factor = 1.05
 color = "orange"
 vendor = "Prusament"

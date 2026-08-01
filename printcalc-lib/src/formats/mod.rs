@@ -80,7 +80,11 @@ pub trait SliceParser {
 /// parses with the first one whose `detect()` matches. Grows one `#[cfg]`
 /// branch per parser as later milestones add them (bambu-3mf, prusa-gcode,
 /// prusa-bgcode).
-pub fn parse_slice_file(bytes: &[u8], filename: &str) -> Result<SliceSummary, ParseError> {
+///
+/// `filename` is a detection hint only (each parser checks its extension
+/// first, then sniffs the bytes) — nothing is read from disk; for that see
+/// [`crate::read_slice_file`].
+pub fn parse_slice_bytes(bytes: &[u8], filename: &str) -> Result<SliceSummary, ParseError> {
     #[cfg(feature = "bambu-3mf")]
     if bambu_3mf::Bambu3mf::detect(bytes, filename) {
         return bambu_3mf::Bambu3mf::parse(bytes);
