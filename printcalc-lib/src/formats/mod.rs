@@ -28,6 +28,7 @@ pub enum ParseError {
     /// Reading the file's bytes failed.
     Io(std::io::Error),
     /// The zip container (3MF, sl1/sl1s) couldn't be opened.
+    #[cfg(any(feature = "bambu-3mf", feature = "prusa-sl1"))]
     Zip(zip::result::ZipError),
     /// The file doesn't look like this parser's format at all.
     NotThisFormat,
@@ -41,6 +42,7 @@ impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ParseError::Io(e) => write!(f, "io error: {e}"),
+            #[cfg(any(feature = "bambu-3mf", feature = "prusa-sl1"))]
             ParseError::Zip(e) => write!(f, "zip error: {e}"),
             ParseError::NotThisFormat => write!(f, "not this parser's format"),
             ParseError::MissingField(name) => write!(f, "missing field: {name}"),
@@ -59,6 +61,7 @@ impl From<std::io::Error> for ParseError {
     }
 }
 
+#[cfg(any(feature = "bambu-3mf", feature = "prusa-sl1"))]
 impl From<zip::result::ZipError> for ParseError {
     fn from(e: zip::result::ZipError) -> Self {
         ParseError::Zip(e)
