@@ -1,3 +1,11 @@
 [workspace]
 resolver = "2"
 members = ["printcalc-lib", "printcalc-cli", "printcalc-wasm"]
+[profile.release]
+opt-level = "z"
+strip = "debuginfo"
+lto = "fat"
+
+[profile.release.package."*"]
+opt-level = "z"
+strip = "debuginfo"
