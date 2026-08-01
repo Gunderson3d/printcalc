@@ -7,7 +7,12 @@ fn prompt(label: &str) -> io::Result<String> {
     print!("{label}: ");
     io::stdout().flush()?;
     let mut line = String::new();
-    io::stdin().read_line(&mut line)?;
+    if io::stdin().read_line(&mut line)? == 0 {
+        // EOF (e.g. piped stdin ran out or was closed) — don't spin the
+        // retry loop forever on an empty answer.
+        println!();
+        return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "end of input"));
+    }
     Ok(line.trim().to_string())
 }
 
