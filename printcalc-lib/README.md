@@ -12,7 +12,7 @@ frontends over it (see `../SPEC.md` for the full design).
 | Format | Feature |
 |---|---|
 | Bambu Studio `.gcode.3mf` | `bambu-3mf` |
-| PrusaSlicer/OrcaSlicer `.gcode` | `prusa-gcode` |
+| Plain-text `.gcode` (most FDM slicers) | `gcode` |
 | PrusaSlicer binary `.bgcode` | `prusa-bgcode` |
 | PrusaSlicer resin `.sl1`/`.sl1s` | `prusa-sl1` |
 

@@ -12,11 +12,11 @@ default = ["bambu", "prusa"]
 
 # Vendor umbrella features: enable every format that vendor's slicer(s) produce and there are built-in presets.
 bambu = ["bambu-3mf"]
-prusa = ["prusa-gcode", "prusa-sl1", "prusa-bgcode"]
+prusa = ["gcode", "prusa-sl1", "prusa-bgcode"]
 
 # Individual format features (selectable on their own for finer-grained builds).
 bambu-3mf = ["dep:tinyzip", "dep:miniz_oxide", "dep:xml"]
-prusa-gcode = []
+gcode = []
 prusa-sl1 = ["dep:tinyzip", "dep:miniz_oxide"]
 prusa-bgcode = ["dep:binarygcode"]
 

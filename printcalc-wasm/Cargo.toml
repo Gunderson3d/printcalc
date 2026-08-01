@@ -15,7 +15,7 @@ prusa = ["printcalc-lib/prusa"]
 
 # Individual format features, also passed through, for finer-grained builds.
 bambu-3mf = ["printcalc-lib/bambu-3mf"]
-prusa-gcode = ["printcalc-lib/prusa-gcode"]
+gcode = ["printcalc-lib/gcode"]
 prusa-sl1 = ["printcalc-lib/prusa-sl1"]
 prusa-bgcode = ["printcalc-lib/prusa-bgcode"]
 

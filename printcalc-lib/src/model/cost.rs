@@ -164,7 +164,7 @@ pub enum CalcError {
 fn expected_printer_kind(format: SourceFormat) -> PrinterKind {
     match format {
         SourceFormat::PrusaSl1 => PrinterKind::Resin,
-        SourceFormat::Bambu3mf | SourceFormat::PrusaGcode | SourceFormat::PrusaBgcode => {
+        SourceFormat::Bambu3mf | SourceFormat::Gcode | SourceFormat::PrusaBgcode => {
             PrinterKind::Fdm
         }
     }
@@ -175,7 +175,7 @@ fn expected_printer_kind(format: SourceFormat) -> PrinterKind {
 fn expected_material_kind(format: SourceFormat) -> MaterialKind {
     match format {
         SourceFormat::PrusaSl1 => MaterialKind::Resin,
-        SourceFormat::Bambu3mf | SourceFormat::PrusaGcode | SourceFormat::PrusaBgcode => {
+        SourceFormat::Bambu3mf | SourceFormat::Gcode | SourceFormat::PrusaBgcode => {
             MaterialKind::Filament
         }
     }

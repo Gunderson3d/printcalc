@@ -14,9 +14,11 @@ pub enum SourceFormat {
     /// Bambu Studio `.gcode.3mf`.
     #[serde(rename = "bambu-3mf")]
     Bambu3mf,
-    /// PrusaSlicer/OrcaSlicer plain-text `.gcode`.
-    #[serde(rename = "prusa-gcode")]
-    PrusaGcode,
+    /// Plain-text `.gcode` with PrusaSlicer-style metadata comments (most
+    /// FDM slicers). Deserialize alias keeps job files written with the old
+    /// `prusa-gcode` name loading.
+    #[serde(rename = "gcode", alias = "prusa-gcode")]
+    Gcode,
     /// PrusaSlicer binary `.bgcode`.
     #[serde(rename = "prusa-bgcode")]
     PrusaBgcode,

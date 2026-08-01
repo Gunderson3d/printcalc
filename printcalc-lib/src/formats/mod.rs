@@ -7,8 +7,8 @@ pub mod slice_summary;
 #[cfg(feature = "bambu-3mf")]
 pub mod bambu_3mf;
 
-#[cfg(feature = "prusa-gcode")]
-pub mod prusa_gcode;
+#[cfg(feature = "gcode")]
+pub mod gcode;
 
 #[cfg(feature = "prusa-sl1")]
 pub mod prusa_sl1;
@@ -16,8 +16,8 @@ pub mod prusa_sl1;
 #[cfg(feature = "prusa-bgcode")]
 pub mod prusa_bgcode;
 
-#[cfg(any(feature = "prusa-gcode", feature = "prusa-bgcode"))]
-mod prusa_metadata;
+#[cfg(any(feature = "gcode", feature = "prusa-bgcode"))]
+mod gcode_metadata;
 
 #[cfg(any(feature = "bambu-3mf", feature = "prusa-sl1"))]
 mod zip_read;
@@ -78,7 +78,7 @@ pub trait SliceParser {
 
 /// Tries every parser compiled in (via feature flags) against `bytes`, and
 /// parses with the first one whose `detect()` matches. Grows one `#[cfg]`
-/// branch per parser as later milestones add them (bambu-3mf, prusa-gcode,
+/// branch per parser as later milestones add them (bambu-3mf, gcode,
 /// prusa-bgcode).
 ///
 /// `filename` is a detection hint only (each parser checks its extension
@@ -97,9 +97,9 @@ pub fn parse_slice_bytes(bytes: &[u8], filename: &str) -> Result<SliceSummary, P
     if prusa_bgcode::PrusaBgcode::detect(bytes, filename) {
         return prusa_bgcode::PrusaBgcode::parse(bytes);
     }
-    #[cfg(feature = "prusa-gcode")]
-    if prusa_gcode::PrusaGcode::detect(bytes, filename) {
-        return prusa_gcode::PrusaGcode::parse(bytes);
+    #[cfg(feature = "gcode")]
+    if gcode::Gcode::detect(bytes, filename) {
+        return gcode::Gcode::parse(bytes);
     }
     let _ = (bytes, filename);
     Err(ParseError::NotThisFormat)

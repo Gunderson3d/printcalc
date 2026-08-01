@@ -1,13 +1,13 @@
-//! PrusaSlicer FDM `.gcode` parser.
+//! Plain-text FDM `.gcode` parser (PrusaSlicer-style metadata comments, as
+//! emitted by most slicers: PrusaSlicer, OrcaSlicer, SuperSlicer, ...).
 
 use super::slice_summary::{SliceSummary, SourceFormat};
-use super::{ParseError, SliceParser, prusa_metadata};
+use super::{ParseError, SliceParser, gcode_metadata};
 
-/// [`SliceParser`] for PrusaSlicer/OrcaSlicer plain-text `.gcode` — see
-/// the module docs.
-pub struct PrusaGcode;
+/// [`SliceParser`] for plain-text `.gcode` — see the module docs.
+pub struct Gcode;
 
-impl SliceParser for PrusaGcode {
+impl SliceParser for Gcode {
     fn detect(bytes: &[u8], filename: &str) -> bool {
         if filename.to_ascii_lowercase().ends_with(".gcode") {
             return true;
@@ -20,8 +20,8 @@ impl SliceParser for PrusaGcode {
         let comment_lines = text
             .lines()
             .filter_map(|line| line.trim_start().strip_prefix(';'));
-        let metadata = prusa_metadata::parse_lines(comment_lines);
-        prusa_metadata::build_slice_summary(&metadata, SourceFormat::PrusaGcode)
+        let metadata = gcode_metadata::parse_lines(comment_lines);
+        gcode_metadata::build_slice_summary(&metadata, SourceFormat::Gcode)
     }
 }
 
@@ -46,14 +46,14 @@ mod tests {
 
     #[test]
     fn detects_by_extension() {
-        assert!(PrusaGcode::detect(b"", "widget.gcode"));
+        assert!(Gcode::detect(b"", "widget.gcode"));
         // A renamed zip (3MF/sl1/sl1s) must not be picked up by the
         // plain-text fallback just because its extension doesn't match.
-        assert!(!PrusaGcode::detect(
+        assert!(!Gcode::detect(
             b"PK\x03\x04not actually gcode",
             "widget.sl1"
         ));
-        assert!(!PrusaGcode::detect(
+        assert!(!Gcode::detect(
             b"GCDE not actually gcode either",
             "widget.bgcode"
         ));
@@ -62,13 +62,13 @@ mod tests {
     #[test]
     fn parses_real_fixture() {
         let bytes = read_test_file("Cube_0.2mm_PLA_Prusa MINI_20m7s.gcode");
-        assert!(PrusaGcode::detect(
+        assert!(Gcode::detect(
             &bytes,
             "Cube_0.2mm_PLA_Prusa MINI_20m7s.gcode"
         ));
 
-        let summary = PrusaGcode::parse(&bytes).unwrap();
-        assert_eq!(summary.source_format, SourceFormat::PrusaGcode);
+        let summary = Gcode::parse(&bytes).unwrap();
+        assert_eq!(summary.source_format, SourceFormat::Gcode);
         assert_eq!(summary.plates.len(), 1);
         let plate = &summary.plates[0];
         assert_eq!(plate.plate_index, 1);
@@ -93,7 +93,7 @@ mod tests {
     #[test]
     fn parses_core_one_idex_single_extruder_fixture() {
         let bytes = read_test_file("Shape-Box_0.4n_0.2mm_PLA_COREONEINDX_19m.gcode");
-        let summary = PrusaGcode::parse(&bytes).unwrap();
+        let summary = Gcode::parse(&bytes).unwrap();
         let plate = &summary.plates[0];
         assert_eq!(plate.printer_model.as_deref(), Some("COREONE_INDX8T"));
         assert_eq!(plate.filament_usage.len(), 1);
@@ -109,7 +109,7 @@ mod tests {
     #[test]
     fn parses_core_one_idex_dual_extruder_fixture() {
         let bytes = read_test_file("Shape-Box_0.4n_0.2mm_PLA,PLA_COREONEINDX_19m.gcode");
-        let summary = PrusaGcode::parse(&bytes).unwrap();
+        let summary = Gcode::parse(&bytes).unwrap();
         let plate = &summary.plates[0];
         assert_eq!(plate.filament_usage.len(), 2);
         assert_eq!(plate.filament_usage[0].slot_id, "0");

@@ -3,7 +3,7 @@
 use binarygcode::{BlockKind, DeserialisedResult, Deserialiser};
 
 use super::slice_summary::{SliceSummary, SourceFormat};
-use super::{ParseError, SliceParser, prusa_metadata};
+use super::{ParseError, SliceParser, gcode_metadata};
 
 /// [`SliceParser`] for PrusaSlicer binary `.bgcode` — see the module docs.
 pub struct PrusaBgcode;
@@ -18,8 +18,8 @@ impl SliceParser for PrusaBgcode {
 
     fn parse(bytes: &[u8]) -> Result<SliceSummary, ParseError> {
         let text = metadata_text(bytes)?;
-        let metadata = prusa_metadata::parse_lines(text.lines());
-        prusa_metadata::build_slice_summary(&metadata, SourceFormat::PrusaBgcode)
+        let metadata = gcode_metadata::parse_lines(text.lines());
+        gcode_metadata::build_slice_summary(&metadata, SourceFormat::PrusaBgcode)
     }
 }
 

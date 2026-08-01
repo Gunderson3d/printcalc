@@ -165,6 +165,6 @@ mod tests {
     fn build_slice_summary_requires_time_and_grams() {
         let mut metadata = HashMap::new();
         metadata.insert("filament used [g]".to_string(), "3.10".to_string());
-        assert!(build_slice_summary(&metadata, SourceFormat::PrusaGcode).is_err());
+        assert!(build_slice_summary(&metadata, SourceFormat::Gcode).is_err());
     }
 }
