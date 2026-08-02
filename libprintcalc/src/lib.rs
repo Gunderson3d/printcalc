@@ -156,6 +156,10 @@ pub enum Error {
         /// The name that was looked up.
         name: String,
     },
+    /// A `Path` job source was used on a target with no filesystem (e.g.
+    /// `wasm32-unknown-unknown`) — embed the slice summary in the job
+    /// instead.
+    DiskUnavailable,
 }
 
 impl fmt::Display for Error {
@@ -166,6 +170,10 @@ impl fmt::Display for Error {
             Error::Parse(e) => write!(f, "{e}"),
             Error::Calc(e) => write!(f, "{e}"),
             Error::ProfileNotFound { kind, name } => write!(f, "{kind} {name:?} not found"),
+            Error::DiskUnavailable => write!(
+                f,
+                "no filesystem on this target — embed the slice summary instead of using a path source"
+            ),
         }
     }
 }
@@ -303,84 +311,9 @@ pub fn calculate(job: &Job, defaults: &CostDefaults) -> Result<CostBreakdown, Er
     )?)
 }
 
-impl Job {
-    /// Serializes this job to the job TOML [`parse_job`] reads back, at
-    /// the given [`JobTier`]:
-    ///
-    /// - [`JobTier::Slim`] (the default) serializes the job as-is —
-    ///   `Linked` refs stay linked, `Embedded` stay embedded, the source
-    ///   is untouched.
-    /// - [`JobTier::Full`] embeds the printer and every material
-    ///   (`Linked` refs resolved against the [`builtin`] presets) — can
-    ///   fail with [`Error::ProfileNotFound`]. The source is untouched.
-    /// - [`JobTier::Bundled`] additionally embeds the slice summary via
-    ///   [`Job::slice_summary`] — a `Path` source is read and parsed
-    ///   here, so this can also fail with [`Error::Io`]/[`Error::Parse`].
-    ///
-    /// Tiers only go *up* (Linked → Embedded, Path → Embedded summary):
-    /// un-embedding is impossible, since a `Linked` ref's name and a
-    /// `Path` source's original location are lost once resolved away.
-    /// The job itself is never mutated — the embedding happens on a
-    /// clone.
-    pub fn to_toml(&self, tier: JobTier) -> Result<String, Error> {
-        let job = match tier {
-            JobTier::Slim => return toml::to_string(self).map_err(|e| Error::Toml(e.to_string())),
-            JobTier::Full | JobTier::Bundled => {
-                let mut job = self.clone();
-                job.printer = ProfileRef::Embedded {
-                    profile: Box::new(resolve_printer(&job.printer)?),
-                };
-                job.material = resolve_materials(&job.material)?
-                    .into_iter()
-                    .map(|(slot, profile)| {
-                        (
-                            slot,
-                            ProfileRef::Embedded {
-                                profile: Box::new(profile),
-                            },
-                        )
-                    })
-                    .collect();
-                if tier == JobTier::Bundled {
-                    job.source = JobSource::Embedded(self.slice_summary()?);
-                }
-                job
-            }
-        };
-        toml::to_string(&job).map_err(|e| Error::Toml(e.to_string()))
-    }
-
-    /// Parses printer profile TOML and embeds it as this job's printer —
-    /// sugar for `job.printer = ProfileRef::Embedded { .. }` around
-    /// [`parse_printer`]. Embedded profiles go straight through
-    /// [`calculate`], no built-in preset or library lookup.
-    pub fn embed_printer_toml(&mut self, toml_text: &str) -> Result<(), Error> {
-        self.printer = ProfileRef::Embedded {
-            profile: Box::new(parse_printer(toml_text)?),
-        };
-        Ok(())
-    }
-
-    /// Parses filament/resin profile TOML and embeds it as the material
-    /// for `slot` (see [`FilamentUsage::slot_id`]) — sugar for inserting a
-    /// `ProfileRef::Embedded` into `job.material` around
-    /// [`parse_material`].
-    pub fn embed_material_toml(
-        &mut self,
-        slot: impl Into<String>,
-        toml_text: &str,
-    ) -> Result<(), Error> {
-        self.material.insert(
-            slot.into(),
-            ProfileRef::Embedded {
-                profile: Box::new(parse_material(toml_text)?),
-            },
-        );
-        Ok(())
-    }
-}
-
-fn resolve_printer(printer_ref: &ProfileRef<PrinterProfile>) -> Result<PrinterProfile, Error> {
+pub(crate) fn resolve_printer(
+    printer_ref: &ProfileRef<PrinterProfile>,
+) -> Result<PrinterProfile, Error> {
     match printer_ref {
         ProfileRef::Embedded { profile } => Ok((**profile).clone()),
         ProfileRef::Linked { name } => {
@@ -394,7 +327,7 @@ fn resolve_printer(printer_ref: &ProfileRef<PrinterProfile>) -> Result<PrinterPr
     }
 }
 
-fn resolve_materials(
+pub(crate) fn resolve_materials(
     map: &HashMap<String, ProfileRef<MaterialProfile>>,
 ) -> Result<HashMap<String, MaterialProfile>, Error> {
     map.iter()

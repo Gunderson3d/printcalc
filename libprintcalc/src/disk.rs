@@ -23,10 +23,20 @@ impl Job {
     /// directory — if the job file lives elsewhere, resolve the path
     /// against its directory first (that's what the CLI does) and
     /// call [`read_slice_file`] yourself.
+    ///
+    /// On targets with no filesystem (`wasm32-unknown-unknown` and other
+    /// non-WASI wasm), a `Path` source fails with
+    /// [`Error::DiskUnavailable`] instead of attempting the read — embed
+    /// the summary in the job there.
     pub fn slice_summary(&self) -> Result<SliceSummary, Error> {
         match &self.source {
             JobSource::Embedded(summary) => Ok(summary.clone()),
-            JobSource::Path(path) => read_slice_file(path),
+            JobSource::Path(path) => {
+                if cfg!(all(target_family = "wasm", not(target_os = "wasi"))) {
+                    return Err(Error::DiskUnavailable);
+                }
+                read_slice_file(path)
+            }
         }
     }
 }
