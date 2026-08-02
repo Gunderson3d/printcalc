@@ -3,7 +3,7 @@ use std::error::Error;
 
 use clap::{Args, Subcommand};
 
-use printcalc::model::filament::{MaterialKind, MaterialProfile};
+use libprintcalc::model::filament::{MaterialKind, MaterialProfile};
 
 use crate::interactive;
 use crate::ops;

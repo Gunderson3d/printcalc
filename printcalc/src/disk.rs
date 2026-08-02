@@ -1,160 +1,221 @@
-//! Thin read-only disk helpers: load a sliced file, job, or profile from a
-//! path. This is the only part of `printcalc` that touches the
-//! filesystem — reading only; saving files, the profile library, and config
-//! persistence stay in the CLI (`cli` feature). The in-memory counterparts
-//! ([`crate::parse_slice_bytes`], [`crate::parse_job`]) remain the right
-//! choice for callers without a filesystem (`printcalc-wasm`).
+//! Profile library load/save (`~/.config/printcalc/{printers,filaments}/*.toml`)
+//! and config persistence (`~/.config/printcalc/config.toml`).
+//!
+//! CLI-only — `printcalc` is filesystem-free, and `printcalc-wasm` has
+//! no filesystem at all.
 
+use std::fmt;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use crate::Error;
-use crate::formats;
-use crate::formats::slice_summary::SliceSummary;
-use crate::model::filament::MaterialProfile;
-use crate::model::job::{Job, JobSource};
-use crate::model::printer::PrinterProfile;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
-impl Job {
-    /// The job's slice data: cloned straight out of an `Embedded` source,
-    /// or read and parsed from a `Path` source via [`read_slice_file`].
-    ///
-    /// A relative `source.path` resolves against the current working
-    /// directory — if the job file lives elsewhere, resolve the path
-    /// against its directory first (that's what the CLI does) and
-    /// call [`read_slice_file`] yourself.
-    pub fn slice_summary(&self) -> Result<SliceSummary, Error> {
-        match &self.source {
-            JobSource::Embedded(summary) => Ok(summary.clone()),
-            JobSource::Path(path) => read_slice_file(path),
+use libprintcalc::model::cost::CostDefaults;
+use libprintcalc::model::filament::MaterialProfile;
+use libprintcalc::model::printer::PrinterProfile;
+
+/// Why a profile library or config operation failed.
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum LibraryError {
+    /// A read/write against the profile library failed.
+    Io(std::io::Error),
+    /// TOML (de)serialization failed; the message is `toml`'s own error text.
+    Toml(String),
+    /// No profile saved under this name.
+    NotFound {
+        /// `"printer"` or `"filament"`.
+        kind: &'static str,
+        /// The name that was looked up.
+        name: String,
+    },
+}
+
+impl fmt::Display for LibraryError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LibraryError::Io(e) => write!(f, "io error: {e}"),
+            LibraryError::Toml(e) => write!(f, "toml error: {e}"),
+            LibraryError::NotFound { kind, name } => write!(f, "{kind} {name:?} not found"),
         }
     }
 }
 
-/// Reads the sliced file at `path` and parses it via
-/// [`formats::parse_slice_bytes`] — the file's own name is passed as the
-/// detection hint.
-pub fn read_slice_file(path: &Path) -> Result<SliceSummary, Error> {
-    let bytes = fs::read(path)?;
-    let filename = path.file_name().and_then(|f| f.to_str()).unwrap_or("");
-    Ok(formats::parse_slice_bytes(&bytes, filename)?)
+impl std::error::Error for LibraryError {}
+
+impl From<std::io::Error> for LibraryError {
+    fn from(e: std::io::Error) -> Self {
+        LibraryError::Io(e)
+    }
 }
 
-/// Reads and parses the job TOML file at `path` (see [`crate::parse_job`]).
-pub fn read_job(path: &Path) -> Result<Job, Error> {
-    crate::parse_job(&fs::read_to_string(path)?)
+/// `~/.config/printcalc/` (via the `dirs` crate), or `$PRINTCALC_CONFIG_DIR`
+/// if set — an override real users can reach for (a second profile set, a
+/// portable/synced location) and tests use to avoid touching the real
+/// user config.
+pub fn config_dir() -> PathBuf {
+    if let Ok(dir) = std::env::var("PRINTCALC_CONFIG_DIR") {
+        return PathBuf::from(dir);
+    }
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("printcalc")
 }
 
-/// Reads and parses the printer profile TOML file at `path` (see
-/// [`crate::parse_printer`]).
-pub fn read_printer(path: &Path) -> Result<PrinterProfile, Error> {
-    crate::parse_printer(&fs::read_to_string(path)?)
+/// `<config_dir>/printers/`.
+pub fn printers_dir() -> PathBuf {
+    config_dir().join("printers")
 }
 
-/// Reads and parses the filament/resin profile TOML file at `path` (see
-/// [`crate::parse_material`]).
-pub fn read_material(path: &Path) -> Result<MaterialProfile, Error> {
-    crate::parse_material(&fs::read_to_string(path)?)
+/// `<config_dir>/filaments/`.
+pub fn filaments_dir() -> PathBuf {
+    config_dir().join("filaments")
+}
+
+/// Falls back to [`CostDefaults::default`] if `config.toml` can't be read
+/// — not just missing, *any* read failure. There's no `printcalc config
+/// init` step, so a fresh install just works with the defaults instead of
+/// hard-failing every calc.
+pub fn load_config() -> Result<CostDefaults, LibraryError> {
+    let path = config_dir().join("config.toml");
+    match fs::read_to_string(&path) {
+        Ok(text) => toml::from_str(&text).map_err(|e| LibraryError::Toml(e.to_string())),
+        Err(_) => Ok(CostDefaults::default()),
+    }
+}
+
+/// Persists `config` to `<config_dir>/config.toml`, creating the config
+/// directory first if it doesn't exist yet (a fresh install has no
+/// `~/.config/printcalc/` at all until something's saved to it).
+pub fn save_config(config: &CostDefaults) -> Result<(), LibraryError> {
+    let dir = config_dir();
+    fs::create_dir_all(&dir)?;
+    let text = toml::to_string(config).map_err(|e| LibraryError::Toml(e.to_string()))?;
+    fs::write(dir.join("config.toml"), text)?;
+    Ok(())
+}
+
+fn save_profile<T: Serialize>(dir: &Path, name: &str, profile: &T) -> Result<(), LibraryError> {
+    fs::create_dir_all(dir)?;
+    let text = toml::to_string(profile).map_err(|e| LibraryError::Toml(e.to_string()))?;
+    fs::write(dir.join(format!("{name}.toml")), text)?;
+    Ok(())
+}
+
+fn load_profile<T: DeserializeOwned>(
+    dir: &Path,
+    kind: &'static str,
+    name: &str,
+) -> Result<T, LibraryError> {
+    let path = dir.join(format!("{name}.toml"));
+    let text = fs::read_to_string(&path).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            LibraryError::NotFound {
+                kind,
+                name: name.to_string(),
+            }
+        } else {
+            LibraryError::Io(e)
+        }
+    })?;
+    toml::from_str(&text).map_err(|e| LibraryError::Toml(e.to_string()))
+}
+
+fn list_profiles(dir: &Path) -> Result<Vec<String>, LibraryError> {
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e.into()),
+    };
+    let mut names: Vec<String> = entries
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.extension().and_then(|ext| ext.to_str()) == Some("toml"))
+        .filter_map(|p| p.file_stem().and_then(|s| s.to_str()).map(String::from))
+        .collect();
+    names.sort();
+    Ok(names)
+}
+
+/// Saves `profile` to `printers_dir()/<name>.toml`, overwriting any
+/// existing file under that name.
+pub fn save_printer(profile: &PrinterProfile) -> Result<(), LibraryError> {
+    save_profile(&printers_dir(), &profile.name, profile)
+}
+
+/// Loads a saved printer profile by name.
+pub fn load_printer(name: &str) -> Result<PrinterProfile, LibraryError> {
+    load_profile(&printers_dir(), "printer", name)
+}
+
+/// Every saved printer profile's name, sorted. Empty (not an error) if
+/// `printers_dir()` doesn't exist yet.
+pub fn list_printers() -> Result<Vec<String>, LibraryError> {
+    list_profiles(&printers_dir())
+}
+
+/// Saves `profile` to `filaments_dir()/<name>.toml`, overwriting any
+/// existing file under that name.
+pub fn save_filament(profile: &MaterialProfile) -> Result<(), LibraryError> {
+    save_profile(&filaments_dir(), &profile.name, profile)
+}
+
+/// Loads a saved filament profile by name.
+pub fn load_filament(name: &str) -> Result<MaterialProfile, LibraryError> {
+    load_profile(&filaments_dir(), "filament", name)
+}
+
+/// Every saved filament profile's name, sorted. Empty (not an error) if
+/// `filaments_dir()` doesn't exist yet.
+pub fn list_filaments() -> Result<Vec<String>, LibraryError> {
+    list_profiles(&filaments_dir())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::filament::MaterialKind;
-    use crate::model::printer::PrinterKind;
+    use libprintcalc::model::filament::MaterialKind;
 
-    /// Reads a real sliced file from disk, picking the parser from the
-    /// filename extension.
-    #[test]
-    fn read_slice_file_parses_fixture() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../Testfiles/Shape-Box.sl1");
-        let summary = read_slice_file(&path).unwrap();
-        assert_eq!(summary.plates.len(), 1);
-        assert!(summary.plates[0].print_time_seconds > 0.0);
+    fn temp_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("printcalc-test-{name}"));
+        let _ = fs::remove_dir_all(&dir);
+        dir
     }
 
-    /// Profiles round-trip through the same TOML the CLI's library saves,
-    /// and a missing file surfaces as `Error::Io`.
     #[test]
-    fn read_profiles_and_job_from_disk() {
-        let dir = std::env::temp_dir().join("printcalc-test-disk");
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-
-        let printer_path = dir.join("printer.toml");
-        fs::write(
-            &printer_path,
-            r#"
-name = "test-printer"
-kind = "fdm"
-purchase_price = 500.0
-additional_upfront_cost = 0.0
-estimated_life_years = 5.0
-estimated_uptime_percent = 0.5
-annual_maintenance_cost = 50.0
-power_consumption_watts = 150.0
-cost_buffer_factor = 1.2
-"#,
-        )
-        .unwrap();
-        let printer = read_printer(&printer_path).unwrap();
-        assert_eq!(printer.name, "test-printer");
-        assert_eq!(printer.kind, PrinterKind::Fdm);
-
-        let material_path = dir.join("filament.toml");
-        fs::write(
-            &material_path,
-            r#"
-name = "test-pla"
-kind = "filament"
-price = 20.0
-efficiency_factor = 1.1
-"#,
-        )
-        .unwrap();
-        let material = read_material(&material_path).unwrap();
-        assert_eq!(material.kind, MaterialKind::Filament);
-
-        assert!(matches!(
-            read_job(&dir.join("nope.toml")).unwrap_err(),
-            Error::Io(_)
-        ));
-
-        let _ = fs::remove_dir_all(&dir);
-    }
-
-    /// `Job::slice_summary` clones an embedded summary straight through and
-    /// reads/parses a path source.
-    #[test]
-    fn job_slice_summary_handles_both_source_kinds() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../Testfiles/Shape-Box.sl1");
-        let from_path = crate::new_job(
-            "widget",
-            path.clone(),
-            crate::create_printer(
-                "sl1-printer",
-                PrinterKind::Resin,
-                crate::WearProfile {
-                    purchase_price: 400.0,
-                    additional_upfront_cost: 0.0,
-                    estimated_life_years: 5.0,
-                    estimated_uptime_percent: 0.3,
-                    annual_maintenance_cost: 20.0,
-                    power_consumption_watts: 60.0,
-                    cost_buffer_factor: 1.2,
-                },
-            ),
-            std::collections::HashMap::new(),
-            None,
-            Vec::new(),
-        );
-        let summary = from_path.slice_summary().unwrap();
-        assert_eq!(summary.plates.len(), 1);
-
-        let embedded = Job {
-            source: JobSource::Embedded(summary.clone()),
-            ..from_path
+    fn save_load_and_list_round_trip() {
+        let dir = temp_dir("save-load-list");
+        let profile = MaterialProfile {
+            name: "pla-black".into(),
+            kind: MaterialKind::Filament,
+            price: 18.99,
+            efficiency_factor: 1.1,
+            color: Some("black".into()),
+            vendor: None,
         };
-        assert_eq!(embedded.slice_summary().unwrap(), summary);
+
+        save_profile(&dir, &profile.name, &profile).unwrap();
+        let loaded: MaterialProfile = load_profile(&dir, "filament", "pla-black").unwrap();
+        assert_eq!(loaded, profile);
+        assert_eq!(list_profiles(&dir).unwrap(), vec!["pla-black".to_string()]);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_missing_profile_is_not_found() {
+        let dir = temp_dir("missing");
+        let err = load_profile::<MaterialProfile>(&dir, "filament", "nope").unwrap_err();
+        assert!(matches!(
+            err,
+            LibraryError::NotFound { kind: "filament", name } if name == "nope"
+        ));
+    }
+
+    #[test]
+    fn list_of_missing_dir_is_empty() {
+        let dir = temp_dir("list-missing-dir");
+        assert_eq!(list_profiles(&dir).unwrap(), Vec::<String>::new());
     }
 }

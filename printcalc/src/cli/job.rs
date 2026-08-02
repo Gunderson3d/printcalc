@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use clap::ValueEnum;
 
-use printcalc::model::cost::CostBreakdown;
+use libprintcalc::model::cost::CostBreakdown;
 
 use crate::interactive;
 use crate::ops::{self, JobTier, NewJobParams};
@@ -189,7 +189,7 @@ fn parse_plate_override(plate: Option<&str>) -> Result<Option<Option<u32>>, Box<
 /// it (per-slot, labeled by slot id) unless the slice actually has just one
 /// real `FilamentUsage`, which still gets one plain prompt.
 fn resolve_filament_names(
-    slice: &printcalc::formats::slice_summary::SliceSummary,
+    slice: &libprintcalc::formats::slice_summary::SliceSummary,
     filament: Option<String>,
     filament_map: Option<String>,
     interactive_mode: bool,

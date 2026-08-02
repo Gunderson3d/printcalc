@@ -1,6 +1,6 @@
 # printcalc-wasm
 
-`wasm-bindgen` bindings over `printcalc`, mirroring its crate-root
+`wasm-bindgen` bindings over `libprintcalc`, mirroring its crate-root
 API for everything that works without a filesystem:
 
 - `parse_slice_bytes(bytes, filename)` → `SliceSummary` JSON

@@ -10,13 +10,13 @@ use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use printcalc::builtin;
-use printcalc::formats::slice_summary::SliceSummary;
-use printcalc::formats::{self, ParseError};
-use printcalc::model::cost::{self, CalcError, CostBreakdown, CostDefaults};
-use printcalc::model::filament::MaterialProfile;
-use printcalc::model::job::{Job, JobSource, LaborCost, ProfileRef};
-use printcalc::model::printer::PrinterProfile;
+use libprintcalc::builtin;
+use libprintcalc::formats::slice_summary::SliceSummary;
+use libprintcalc::formats::{self, ParseError};
+use libprintcalc::model::cost::{self, CalcError, CostBreakdown, CostDefaults};
+use libprintcalc::model::filament::MaterialProfile;
+use libprintcalc::model::job::{Job, JobSource, LaborCost, ProfileRef};
+use libprintcalc::model::printer::PrinterProfile;
 
 use crate::disk::{self, LibraryError};
 
@@ -37,7 +37,7 @@ pub enum OpsError {
     /// A profile library or config operation failed.
     Library(LibraryError),
     /// A filesystem-free `printcalc` call failed.
-    Lib(printcalc::Error),
+    Lib(libprintcalc::Error),
 }
 
 impl fmt::Display for OpsError {
@@ -75,8 +75,8 @@ impl From<LibraryError> for OpsError {
         OpsError::Library(e)
     }
 }
-impl From<printcalc::Error> for OpsError {
-    fn from(e: printcalc::Error) -> Self {
+impl From<libprintcalc::Error> for OpsError {
+    fn from(e: libprintcalc::Error) -> Self {
         OpsError::Lib(e)
     }
 }
@@ -99,7 +99,7 @@ pub fn add_printer(profile: &PrinterProfile) -> Result<(), OpsError> {
 }
 
 /// Every printer profile name — saved ones plus any built-in preset (see
-/// [`printcalc::builtin`]) not already saved under the same name,
+/// [`libprintcalc::builtin`]) not already saved under the same name,
 /// sorted.
 pub fn list_printers() -> Result<Vec<String>, OpsError> {
     let mut names = disk::list_printers()?;
@@ -113,7 +113,7 @@ pub fn list_printers() -> Result<Vec<String>, OpsError> {
 }
 
 /// Loads a printer profile by name — checks the local library first, then
-/// falls back to a built-in preset (see [`printcalc::builtin`]) under
+/// falls back to a built-in preset (see [`libprintcalc::builtin`]) under
 /// the same name.
 pub fn show_printer(name: &str) -> Result<PrinterProfile, OpsError> {
     match disk::load_printer(name) {
@@ -135,7 +135,7 @@ pub fn add_filament(profile: &MaterialProfile) -> Result<(), OpsError> {
 }
 
 /// Every filament profile name — saved ones plus any built-in preset (see
-/// [`printcalc::builtin`]) not already saved under the same name,
+/// [`libprintcalc::builtin`]) not already saved under the same name,
 /// sorted.
 pub fn list_filaments() -> Result<Vec<String>, OpsError> {
     let mut names = disk::list_filaments()?;
@@ -149,7 +149,7 @@ pub fn list_filaments() -> Result<Vec<String>, OpsError> {
 }
 
 /// Loads a filament profile by name — checks the local library first, then
-/// falls back to a built-in preset (see [`printcalc::builtin`]) under
+/// falls back to a built-in preset (see [`libprintcalc::builtin`]) under
 /// the same name.
 pub fn show_filament(name: &str) -> Result<MaterialProfile, OpsError> {
     match disk::load_filament(name) {
@@ -304,10 +304,10 @@ pub fn new_job_from_slice(
 }
 
 /// Writes `job` as TOML to `path`, overwriting any existing file there.
-/// Serialized at the lib's [`printcalc::JobTier::Slim`] tier (as-is);
+/// Serialized at the lib's [`libprintcalc::JobTier::Slim`] tier (as-is);
 /// re-tiering is [`retier_job`]'s job, done against the local library.
 pub fn save_job(job: &Job, path: &Path) -> Result<(), OpsError> {
-    let text = job.to_toml(printcalc::JobTier::Slim)?;
+    let text = job.to_toml(libprintcalc::JobTier::Slim)?;
     fs::write(path, text)?;
     Ok(())
 }
@@ -315,7 +315,7 @@ pub fn save_job(job: &Job, path: &Path) -> Result<(), OpsError> {
 /// Reads and parses a job TOML file from disk.
 pub fn load_job(path: &Path) -> Result<Job, OpsError> {
     let text = fs::read_to_string(path)?;
-    Ok(printcalc::parse_job(&text)?)
+    Ok(libprintcalc::parse_job(&text)?)
 }
 
 /// Loads the job at `job_path`, resolves its printer/filament refs (against
@@ -446,10 +446,10 @@ fn resolve_materials(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use printcalc::formats::slice_summary::{FilamentUsage, PlateSummary, SourceFormat};
-    use printcalc::model::filament::MaterialKind;
-    use printcalc::model::job::{HardwareItem, SINGLE_MATERIAL_SLOT};
-    use printcalc::model::printer::{PrinterKind, WearProfile};
+    use libprintcalc::formats::slice_summary::{FilamentUsage, PlateSummary, SourceFormat};
+    use libprintcalc::model::filament::MaterialKind;
+    use libprintcalc::model::job::{HardwareItem, SINGLE_MATERIAL_SLOT};
+    use libprintcalc::model::printer::{PrinterKind, WearProfile};
 
     fn sl1_fixture_path() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../Testfiles/Shape-Box.sl1s")

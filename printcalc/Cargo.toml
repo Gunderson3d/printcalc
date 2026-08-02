@@ -2,52 +2,39 @@
 name = "printcalc"
 version = "0.2.0"
 edition = "2024"
-description = "Calculate 3D print job costs (material, print time, printer wear, electricity, labor, hardware) from sliced-file output. Library and CLI."
+description = "Command-line tool for calculating 3D print job costs (material, print time, printer wear, electricity, labor, hardware) from sliced-file output. The library lives in `libprintcalc`."
 readme = "README.md"
 license = "Apache-2.0"
 repository = "https://github.com/Kaifungamedev/printcalc"
 homepage = "https://github.com/Kaifungamedev/printcalc"
 keywords = ["3d-printing", "gcode", "3mf", "cost", "slicer"]
-categories = ["command-line-utilities", "parser-implementations"]
-
-[lib]
-name = "printcalc"
-path = "src/lib.rs"
+categories = ["command-line-utilities"]
 
 [[bin]]
 name = "printcalc"
-path = "src/bin/printcalc/main.rs"
-required-features = ["cli"]
+path = "src/main.rs"
 
 [features]
-default = ["cli", "bambu", "prusa"]
+default = ["bambu", "prusa"]
 
-# Build the `printcalc` binary. Enabled by default so `cargo install
-# printcalc` works; library-only users can turn it off with
-# `default-features = false` and `features = ["lib"]`.
-cli = ["dep:clap", "dep:dirs"]
-lib = ["bambu", "prusa"]
-
-# Vendor umbrella features: enable every format that vendor's slicer(s) produce and there are built-in presets.
-bambu = ["bambu-3mf"]
-prusa = ["gcode", "prusa-sl1", "prusa-bgcode"]
+# Vendor umbrella features, passed through to libprintcalc: enable every
+# format that vendor's slicer(s) produce and there are built-in presets.
+bambu = ["libprintcalc/bambu"]
+prusa = ["libprintcalc/prusa"]
 
 # Individual format features (selectable on their own for finer-grained builds).
-bambu-3mf = ["dep:tinyzip", "dep:miniz_oxide", "dep:xml"]
-gcode = []
-prusa-sl1 = ["dep:tinyzip", "dep:miniz_oxide"]
-prusa-bgcode = ["dep:binarygcode"]
+bambu-3mf = ["libprintcalc/bambu-3mf"]
+gcode = ["libprintcalc/gcode"]
+prusa-sl1 = ["libprintcalc/prusa-sl1"]
+prusa-bgcode = ["libprintcalc/prusa-bgcode"]
 
 [dependencies]
-binarygcode = { version = "0.0.3", optional = true }
-clap = { version = "4.6.4", features = ["derive"], optional = true }
-dirs = { version = "6.0.0", optional = true }
-miniz_oxide = { version = "0.8.9", optional = true }
+clap = { version = "4.6.4", features = ["derive"] }
+dirs = "6.0.0"
+libprintcalc = { path = "../libprintcalc", version = "0.2.0", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.150"
-tinyzip = { version = "0.4.0", default-features = false, optional = true }
 toml = "1.1.3"
-xml = { version = "1.3.0", optional = true }
 
 # Prebuilt binaries for `cargo binstall printcalc`, attached to the GitHub
 # Release of each `v*` tag by .github/workflows/release.yml.

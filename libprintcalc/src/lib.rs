@@ -1,11 +1,11 @@
 #![warn(missing_docs)]
 //! Core library for calculating 3D print job costs from sliced-file output.
 //!
-//! `printcalc` is the single home for all I/O-free logic — slice-file
+//! `libprintcalc` is the single home for all I/O-free logic — slice-file
 //! parsing, cost calculation, and job-tier data structures — plus a thin
 //! read-only [`disk`] helper for loading them from files.
-//! The `printcalc` binary (this same crate, `cli` feature) and
-//! `printcalc-wasm` are thin frontends over it; the CLI additionally owns
+//! The `printcalc` CLI (its own crate) and `printcalc-wasm` are thin
+//! frontends over it; the CLI additionally owns
 //! everything write- or config-backed (the profile library, job file
 //! saving, config persistence).
 //!
@@ -38,13 +38,13 @@
 //! ```
 //! use std::collections::HashMap;
 //!
-//! use printcalc::{
+//! use libprintcalc::{
 //!     calculate_cost, CostDefaults, FilamentUsage, Job, JobSource, LaborCost, MaterialKind,
 //!     MaterialProfile, PlateSummary, PrinterKind, PrinterProfile, ProfileRef, SliceSummary,
 //!     SourceFormat, WearProfile, SINGLE_MATERIAL_SLOT,
 //! };
 //!
-//! // Normally the output of `printcalc::parse_slice_bytes(bytes, filename)`.
+//! // Normally the output of `libprintcalc::parse_slice_bytes(bytes, filename)`.
 //! let slice = SliceSummary {
 //!     source_format: SourceFormat::Bambu3mf,
 //!     plates: vec![PlateSummary {

@@ -222,6 +222,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66"
 
 [[package]]
+name = "libprintcalc"
+version = "0.2.0"
+dependencies = [
+ "binarygcode",
+ "miniz_oxide",
+ "serde",
+ "serde_json",
+ "tinyzip",
+ "toml",
+ "xml",
+]
+
+[[package]]
 name = "libredox"
 version = "0.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -277,22 +290,19 @@ checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 name = "printcalc"
 version = "0.2.0"
 dependencies = [
- "binarygcode",
  "clap",
  "dirs",
- "miniz_oxide",
+ "libprintcalc",
  "serde",
  "serde_json",
- "tinyzip",
  "toml",
- "xml",
 ]
 
 [[package]]
 name = "printcalc-wasm"
 version = "0.1.0"
 dependencies = [
- "printcalc",
+ "libprintcalc",
  "serde_json",
  "wasm-bindgen",
 ]
