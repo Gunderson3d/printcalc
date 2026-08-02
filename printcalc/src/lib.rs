@@ -1,12 +1,13 @@
 #![warn(missing_docs)]
 //! Core library for calculating 3D print job costs from sliced-file output.
 //!
-//! `printcalc-lib` is the single home for all I/O-free logic — slice-file
+//! `printcalc` is the single home for all I/O-free logic — slice-file
 //! parsing, cost calculation, and job-tier data structures — plus a thin
 //! read-only [`disk`] helper for loading them from files.
-//! `printcalc-cli` and `printcalc-wasm` are thin frontends over it; the CLI
-//! additionally owns everything write- or config-backed (the profile
-//! library, job file saving, config persistence).
+//! The `printcalc` binary (this same crate, `cli` feature) and
+//! `printcalc-wasm` are thin frontends over it; the CLI additionally owns
+//! everything write- or config-backed (the profile library, job file
+//! saving, config persistence).
 //!
 //! # Entry points
 //!
@@ -37,13 +38,13 @@
 //! ```
 //! use std::collections::HashMap;
 //!
-//! use printcalc_lib::{
+//! use printcalc::{
 //!     calculate_cost, CostDefaults, FilamentUsage, Job, JobSource, LaborCost, MaterialKind,
 //!     MaterialProfile, PlateSummary, PrinterKind, PrinterProfile, ProfileRef, SliceSummary,
 //!     SourceFormat, WearProfile, SINGLE_MATERIAL_SLOT,
 //! };
 //!
-//! // Normally the output of `printcalc_lib::parse_slice_bytes(bytes, filename)`.
+//! // Normally the output of `printcalc::parse_slice_bytes(bytes, filename)`.
 //! let slice = SliceSummary {
 //!     source_format: SourceFormat::Bambu3mf,
 //!     plates: vec![PlateSummary {
@@ -195,14 +196,14 @@ pub fn parse_job(text: &str) -> Result<Job, Error> {
 }
 
 /// Parses printer profile TOML already in hand — the same format
-/// [`read_printer`] loads from disk and `printcalc-cli` saves into its
+/// [`read_printer`] loads from disk and the CLI saves into its
 /// profile library.
 pub fn parse_printer(text: &str) -> Result<PrinterProfile, Error> {
     toml::from_str(text).map_err(|e| Error::Toml(e.to_string()))
 }
 
 /// Parses filament/resin profile TOML already in hand — the same format
-/// [`read_material`] loads from disk and `printcalc-cli` saves into its
+/// [`read_material`] loads from disk and the CLI saves into its
 /// profile library.
 pub fn parse_material(text: &str) -> Result<MaterialProfile, Error> {
     toml::from_str(text).map_err(|e| Error::Toml(e.to_string()))

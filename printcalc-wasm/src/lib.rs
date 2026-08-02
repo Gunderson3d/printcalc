@@ -1,4 +1,4 @@
-//! WASM bindings over `printcalc_lib` for in-browser use, mirroring the
+//! WASM bindings over `printcalc` for in-browser use, mirroring the
 //! lib's crate-root API one-for-one for everything that makes sense
 //! without a filesystem: `parse_slice_bytes`, `parse_job`, `new_job`, and
 //! `calculate`, plus the `calc_job` one-shot (TOML in, breakdown out)
@@ -20,7 +20,7 @@
 
 use wasm_bindgen::prelude::*;
 
-use printcalc_lib::{
+use printcalc::{
     builtin, calculate as lib_calculate, new_job as lib_new_job, parse_job as lib_parse_job,
     parse_material as lib_parse_material, parse_printer as lib_parse_printer,
     parse_slice_bytes as lib_parse_slice_bytes, CostDefaults, HardwareItem, Job, JobSource,
@@ -33,7 +33,7 @@ pub fn printcalc_wasm_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
-/// Built-in printer presets (see `printcalc_lib::builtin`), as a JSON
+/// Built-in printer presets (see `printcalc::builtin`), as a JSON
 /// array of `PrinterProfile` — lets the host page offer them without a
 /// filesystem to load a saved library from.
 #[wasm_bindgen]
@@ -47,7 +47,7 @@ pub fn builtin_filaments() -> Result<String, JsError> {
     serde_json::to_string(&builtin::filaments()).map_err(|e| JsError::new(&e.to_string()))
 }
 
-/// Mirrors `printcalc_lib::parse_slice_bytes`: parses a sliced file's
+/// Mirrors `printcalc::parse_slice_bytes`: parses a sliced file's
 /// bytes into a `SliceSummary`, returned as JSON. `filename` is a
 /// detection hint only.
 #[wasm_bindgen]
@@ -57,7 +57,7 @@ pub fn parse_slice_bytes(bytes: &[u8], filename: &str) -> Result<String, JsError
     serde_json::to_string(&summary).map_err(|e| JsError::new(&e.to_string()))
 }
 
-/// Mirrors `printcalc_lib::parse_job`: parses job TOML into a `Job`,
+/// Mirrors `printcalc::parse_job`: parses job TOML into a `Job`,
 /// returned as JSON.
 #[wasm_bindgen]
 pub fn parse_job(job_toml: &str) -> Result<String, JsError> {
@@ -65,7 +65,7 @@ pub fn parse_job(job_toml: &str) -> Result<String, JsError> {
     serde_json::to_string(&job).map_err(|e| JsError::new(&e.to_string()))
 }
 
-/// Mirrors `printcalc_lib::parse_printer`: parses printer profile TOML
+/// Mirrors `printcalc::parse_printer`: parses printer profile TOML
 /// into a `PrinterProfile`, returned as JSON. Drop it into a job JSON's
 /// `printer` as `{ "profile": <this JSON> }` to cost against it via
 /// [`calculate`].
@@ -75,7 +75,7 @@ pub fn parse_printer(printer_toml: &str) -> Result<String, JsError> {
     serde_json::to_string(&printer).map_err(|e| JsError::new(&e.to_string()))
 }
 
-/// Mirrors `printcalc_lib::parse_material`: parses filament/resin profile
+/// Mirrors `printcalc::parse_material`: parses filament/resin profile
 /// TOML into a `MaterialProfile`, returned as JSON. Drop it into a job
 /// JSON's `material` as `"1": { "profile": <this JSON> }` (per slot) to
 /// cost against it via [`calculate`].
@@ -85,7 +85,7 @@ pub fn parse_material(material_toml: &str) -> Result<String, JsError> {
     serde_json::to_string(&material).map_err(|e| JsError::new(&e.to_string()))
 }
 
-/// Mirrors `printcalc_lib::new_job`: builds a `Job` with the printer
+/// Mirrors `printcalc::new_job`: builds a `Job` with the printer
 /// embedded by value, returned as JSON. `source_json` is either a JSON
 /// string (a sliced-file path, re-parsed at calc time — not here, a
 /// browser has no filesystem) or a `SliceSummary` JSON object (embedded
@@ -131,7 +131,7 @@ pub fn new_job(
     serde_json::to_string(&job).map_err(|e| JsError::new(&e.to_string()))
 }
 
-/// Mirrors `printcalc_lib::calculate`: costs a `job` (JSON) end to end,
+/// Mirrors `printcalc::calculate`: costs a `job` (JSON) end to end,
 /// returning the `CostBreakdown` as JSON. The job's source must be an
 /// embedded `SliceSummary` — a browser has no filesystem to re-parse a
 /// `path` source from. `defaults_json` may be `null`/`undefined` to use

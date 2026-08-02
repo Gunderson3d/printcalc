@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["printcalc-lib", "printcalc-cli", "printcalc-wasm"]
+members = ["printcalc", "printcalc-wasm"]
 [profile.release]
 opt-level = "z"
 strip = "debuginfo"

@@ -1,7 +1,7 @@
 //! Profile library load/save (`~/.config/printcalc/{printers,filaments}/*.toml`)
 //! and config persistence (`~/.config/printcalc/config.toml`).
 //!
-//! CLI-only — `printcalc-lib` is filesystem-free, and `printcalc-wasm` has
+//! CLI-only — `printcalc` is filesystem-free, and `printcalc-wasm` has
 //! no filesystem at all.
 
 use std::fmt;
@@ -11,9 +11,9 @@ use std::path::{Path, PathBuf};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use printcalc_lib::model::cost::CostDefaults;
-use printcalc_lib::model::filament::MaterialProfile;
-use printcalc_lib::model::printer::PrinterProfile;
+use printcalc::model::cost::CostDefaults;
+use printcalc::model::filament::MaterialProfile;
+use printcalc::model::printer::PrinterProfile;
 
 /// Why a profile library or config operation failed.
 #[derive(Debug)]
@@ -175,10 +175,10 @@ pub fn list_filaments() -> Result<Vec<String>, LibraryError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use printcalc_lib::model::filament::MaterialKind;
+    use printcalc::model::filament::MaterialKind;
 
     fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("printcalc-cli-test-{name}"));
+        let dir = std::env::temp_dir().join(format!("printcalc-test-{name}"));
         let _ = fs::remove_dir_all(&dir);
         dir
     }

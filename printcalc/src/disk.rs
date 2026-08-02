@@ -1,7 +1,7 @@
 //! Thin read-only disk helpers: load a sliced file, job, or profile from a
-//! path. This is the only part of `printcalc-lib` that touches the
+//! path. This is the only part of `printcalc` that touches the
 //! filesystem — reading only; saving files, the profile library, and config
-//! persistence stay in `printcalc-cli`. The in-memory counterparts
+//! persistence stay in the CLI (`cli` feature). The in-memory counterparts
 //! ([`crate::parse_slice_bytes`], [`crate::parse_job`]) remain the right
 //! choice for callers without a filesystem (`printcalc-wasm`).
 
@@ -21,7 +21,7 @@ impl Job {
     ///
     /// A relative `source.path` resolves against the current working
     /// directory — if the job file lives elsewhere, resolve the path
-    /// against its directory first (that's what `printcalc-cli` does) and
+    /// against its directory first (that's what the CLI does) and
     /// call [`read_slice_file`] yourself.
     pub fn slice_summary(&self) -> Result<SliceSummary, Error> {
         match &self.source {
@@ -77,7 +77,7 @@ mod tests {
     /// and a missing file surfaces as `Error::Io`.
     #[test]
     fn read_profiles_and_job_from_disk() {
-        let dir = std::env::temp_dir().join("printcalc-lib-test-disk");
+        let dir = std::env::temp_dir().join("printcalc-test-disk");
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
 

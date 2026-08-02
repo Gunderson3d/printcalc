@@ -4,7 +4,7 @@ use std::error::Error;
 
 use clap::Args;
 
-use printcalc_lib::model::cost::CostDefaults;
+use printcalc::model::cost::CostDefaults;
 
 use crate::ops;
 

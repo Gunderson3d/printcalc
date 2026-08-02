@@ -1,6 +1,6 @@
 //! `printcalc` CLI. Arg parsing, interactive prompts, terminal output, and
 //! everything disk-backed (profile library, job file I/O, config
-//! persistence) — the filesystem-free logic lives in `printcalc_lib`.
+//! persistence) — the filesystem-free logic lives in `printcalc`.
 //!
 //! `printcalc <file> [flags]` is the primary action (cost a sliced file, or
 //! calc an existing job `.toml`) — `printer`/`filament` are subcommands for

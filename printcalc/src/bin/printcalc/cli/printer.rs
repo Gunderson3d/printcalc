@@ -4,7 +4,7 @@ use std::error::Error;
 
 use clap::{Args, Subcommand};
 
-use printcalc_lib::model::printer::{PrinterKind, PrinterProfile, WearProfile};
+use printcalc::model::printer::{PrinterKind, PrinterProfile, WearProfile};
 
 use crate::interactive;
 use crate::ops;
