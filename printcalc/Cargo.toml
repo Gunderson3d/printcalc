@@ -24,8 +24,9 @@ default = ["cli", "bambu", "prusa"]
 
 # Build the `printcalc` binary. Enabled by default so `cargo install
 # printcalc` works; library-only users can turn it off with
-# `default-features = false`.
+# `default-features = false` and `features = ["lib"]`.
 cli = ["dep:clap", "dep:dirs"]
+lib = ["bambu", "prusa"]
 
 # Vendor umbrella features: enable every format that vendor's slicer(s) produce and there are built-in presets.
 bambu = ["bambu-3mf"]
