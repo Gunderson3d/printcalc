@@ -3,7 +3,9 @@ use std::error::Error;
 
 use clap::{Args, Subcommand};
 
-use libprintcalc::model::filament::{MaterialKind, MaterialProfile};
+use libprintcalc::model::filament::{
+    DEFAULT_EFFICIENCY_FACTOR, DEFAULT_PRICE, MaterialKind, MaterialProfile,
+};
 
 use crate::interactive;
 use crate::ops;
@@ -25,8 +27,8 @@ pub enum FilamentCommand {
         /// Price per kg (filament) or per liter (resin).
         #[arg(long)]
         price: Option<f64>,
-        #[arg(long = "efficiency-factor", default_value_t = 1.1)]
-        efficiency_factor: f64,
+        #[arg(long = "efficiency-factor")]
+        efficiency_factor: Option<f64>,
         #[arg(long)]
         color: Option<String>,
         #[arg(long)]
@@ -64,10 +66,16 @@ pub fn run(cmd: FilamentCommand, interactive_mode: bool) -> Result<(), Box<dyn E
                 MaterialKind::Filament => "kg",
                 MaterialKind::Resin => "liter",
             };
-            let price = interactive::require_f64(
+            let price = interactive::defaulted_f64(
                 price,
-                "price",
                 &format!("Price per {price_unit}"),
+                DEFAULT_PRICE,
+                interactive_mode,
+            )?;
+            let efficiency_factor = interactive::defaulted_f64(
+                efficiency_factor,
+                "Efficiency factor",
+                DEFAULT_EFFICIENCY_FACTOR,
                 interactive_mode,
             )?;
             let profile = MaterialProfile {

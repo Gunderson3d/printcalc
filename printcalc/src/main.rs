@@ -45,6 +45,11 @@ struct Cli {
     /// Slots left out fall back to --filament, if given.
     #[arg(long = "filament-map")]
     filament_map: Option<String>,
+    /// Filament for any slot still unmapped at calc time — stored in the
+    /// job rather than expanded per slot, so it also covers slots that
+    /// only show up when the sliced file is re-parsed later.
+    #[arg(long = "default-filament")]
+    default_filament: Option<String>,
     /// Save the job here. Without this, nothing is written — the cost is
     /// just computed and shown.
     #[arg(short, long)]
@@ -65,6 +70,14 @@ struct Cli {
     labor_minutes: Option<f64>,
     #[arg(short = 'r', long = "labor-rate")]
     labor_rate: Option<f64>,
+    /// How many units to price. Every cost and price shown is for the
+    /// whole batch, with the per-unit split alongside it.
+    #[arg(short = 'q', long, default_value_t = 1)]
+    quantity: u32,
+    /// Ignore the printer and filament the sliced file names, and ask (or
+    /// fail) as if it said nothing.
+    #[arg(long = "no-detect")]
+    no_detect: bool,
     #[arg(short = 'F', long, value_enum, default_value = "table")]
     format: OutputFormat,
     /// Never prompt; fail fast if something required wasn't passed as a flag.
@@ -81,7 +94,7 @@ struct Cli {
 enum Command {
     Printer(PrinterArgs),
     Filament(FilamentArgs),
-    /// View/set global defaults (electricity cost, labor rate, markup
+    /// View/set global defaults (electricity cost, labor rate, margin
     /// percentages) — saved to `~/.config/printcalc/config.toml`.
     Config(ConfigArgs),
 }
@@ -101,12 +114,15 @@ fn main() {
                 printer: cli.printer,
                 filament: cli.filament,
                 filament_map: cli.filament_map,
+                default_filament: cli.default_filament,
                 output: cli.output,
                 job_type: cli.job_type,
                 retier: cli.retier,
                 plate: cli.plate,
                 labor_minutes: cli.labor_minutes,
                 labor_rate: cli.labor_rate,
+                quantity: cli.quantity,
+                no_detect: cli.no_detect,
                 format: cli.format,
                 interactive,
             }),

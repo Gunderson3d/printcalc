@@ -4,7 +4,11 @@ use std::error::Error;
 
 use clap::{Args, Subcommand};
 
-use libprintcalc::model::printer::{PrinterKind, PrinterProfile, WearProfile};
+use libprintcalc::model::printer::{
+    DEFAULT_ADDITIONAL_UPFRONT_COST, DEFAULT_ANNUAL_MAINTENANCE_COST, DEFAULT_COST_BUFFER_FACTOR,
+    DEFAULT_LIFE_YEARS, DEFAULT_POWER_CONSUMPTION_WATTS, DEFAULT_PURCHASE_PRICE,
+    DEFAULT_UPTIME_PERCENT, PrinterKind, PrinterProfile, WearProfile,
+};
 
 use crate::interactive;
 use crate::ops;
@@ -25,8 +29,8 @@ pub enum PrinterCommand {
         kind: String,
         #[arg(long = "purchase-price")]
         purchase_price: Option<f64>,
-        #[arg(long = "additional-upfront-cost", default_value_t = 0.0)]
-        additional_upfront_cost: f64,
+        #[arg(long = "additional-upfront-cost")]
+        additional_upfront_cost: Option<f64>,
         #[arg(long = "estimated-life-years")]
         estimated_life_years: Option<f64>,
         #[arg(long = "estimated-uptime-percent")]
@@ -37,6 +41,10 @@ pub enum PrinterCommand {
         power_consumption_watts: Option<f64>,
         #[arg(long = "cost-buffer-factor")]
         cost_buffer_factor: Option<f64>,
+        /// Flat cost per printing hour, replacing the whole computed
+        /// machine rate (depreciation, electricity and buffer factor).
+        #[arg(long = "print-time-rate")]
+        print_time_rate: Option<f64>,
     },
     List,
     Show {
@@ -56,6 +64,7 @@ pub fn run(cmd: PrinterCommand, interactive_mode: bool) -> Result<(), Box<dyn Er
             annual_maintenance_cost,
             power_consumption_watts,
             cost_buffer_factor,
+            print_time_rate,
         } => {
             let name = interactive::require_string(name, "name", "Printer name", interactive_mode)?;
             let kind = match kind.as_str() {
@@ -68,40 +77,46 @@ pub fn run(cmd: PrinterCommand, interactive_mode: bool) -> Result<(), Box<dyn Er
                     .into());
                 }
             };
-            let purchase_price = interactive::require_f64(
+            let additional_upfront_cost = interactive::defaulted_f64(
+                additional_upfront_cost,
+                "Additional upfront cost",
+                DEFAULT_ADDITIONAL_UPFRONT_COST,
+                interactive_mode,
+            )?;
+            let purchase_price = interactive::defaulted_f64(
                 purchase_price,
-                "purchase-price",
                 "Purchase price",
+                DEFAULT_PURCHASE_PRICE,
                 interactive_mode,
             )?;
-            let estimated_life_years = interactive::require_f64(
+            let estimated_life_years = interactive::defaulted_f64(
                 estimated_life_years,
-                "estimated-life-years",
                 "Estimated life (years)",
+                DEFAULT_LIFE_YEARS,
                 interactive_mode,
             )?;
-            let estimated_uptime_percent = interactive::require_f64(
+            let estimated_uptime_percent = interactive::defaulted_f64(
                 estimated_uptime_percent,
-                "estimated-uptime-percent",
                 "Estimated uptime (0.0-1.0)",
+                DEFAULT_UPTIME_PERCENT,
                 interactive_mode,
             )?;
-            let annual_maintenance_cost = interactive::require_f64(
+            let annual_maintenance_cost = interactive::defaulted_f64(
                 annual_maintenance_cost,
-                "annual-maintenance-cost",
                 "Annual maintenance cost",
+                DEFAULT_ANNUAL_MAINTENANCE_COST,
                 interactive_mode,
             )?;
-            let power_consumption_watts = interactive::require_f64(
+            let power_consumption_watts = interactive::defaulted_f64(
                 power_consumption_watts,
-                "power-consumption-watts",
                 "Power consumption (watts)",
+                DEFAULT_POWER_CONSUMPTION_WATTS,
                 interactive_mode,
             )?;
-            let cost_buffer_factor = interactive::require_f64(
+            let cost_buffer_factor = interactive::defaulted_f64(
                 cost_buffer_factor,
-                "cost-buffer-factor",
                 "Cost buffer factor",
+                DEFAULT_COST_BUFFER_FACTOR,
                 interactive_mode,
             )?;
 
@@ -116,6 +131,7 @@ pub fn run(cmd: PrinterCommand, interactive_mode: bool) -> Result<(), Box<dyn Er
                     annual_maintenance_cost,
                     power_consumption_watts,
                     cost_buffer_factor,
+                    print_time_rate_override: print_time_rate,
                 },
             };
             ops::add_printer(&profile)?;

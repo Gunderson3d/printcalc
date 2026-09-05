@@ -42,23 +42,31 @@ pub fn require_string(
     }
 }
 
-pub fn require_f64(
+/// An f64 that has a documented fallback (`PRICING.md`'s default column).
+/// Prompts with the default shown and accepts a blank answer when
+/// interactive; under `--no-input` it just takes the default rather than
+/// erroring the way [`require_f64`] does.
+pub fn defaulted_f64(
     value: Option<f64>,
-    flag: &str,
     label: &str,
+    default: f64,
     interactive: bool,
-) -> Result<f64, Box<dyn Error>> {
+) -> io::Result<f64> {
     if let Some(v) = value {
         return Ok(v);
     }
     if !interactive {
-        return Err(missing(flag));
+        return Ok(default);
     }
+    let label = format!("{label} [{default}]");
     loop {
-        let s = prompt(label)?;
+        let s = prompt(&label)?;
+        if s.is_empty() {
+            return Ok(default);
+        }
         match s.parse::<f64>() {
             Ok(v) => return Ok(v),
-            Err(_) => println!("please enter a number"),
+            Err(_) => println!("please enter a number, or leave blank for {default}"),
         }
     }
 }

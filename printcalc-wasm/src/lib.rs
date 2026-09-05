@@ -21,10 +21,10 @@
 use wasm_bindgen::prelude::*;
 
 use libprintcalc::{
-    builtin, calculate as lib_calculate, new_job as lib_new_job, parse_job as lib_parse_job,
-    parse_material as lib_parse_material, parse_printer as lib_parse_printer,
-    parse_slice_bytes as lib_parse_slice_bytes, CostDefaults, HardwareItem, Job, JobSource,
-    LaborCost, MaterialProfile, PrinterProfile, ProfileRef, SliceSummary,
+    CostDefaults, HardwareItem, Job, JobSource, LaborCost, MaterialProfile, PrinterProfile,
+    ProfileRef, SliceSummary, auto_job as lib_auto_job, builtin, calculate as lib_calculate,
+    new_job as lib_new_job, parse_job as lib_parse_job, parse_material as lib_parse_material,
+    parse_printer as lib_parse_printer, parse_slice_bytes as lib_parse_slice_bytes,
 };
 use std::collections::HashMap;
 
@@ -131,6 +131,90 @@ pub fn new_job(
     serde_json::to_string(&job).map_err(|e| JsError::new(&e.to_string()))
 }
 
+/// Mirrors `libprintcalc::auto_job`: builds a job from a sliced file
+/// alone, taking the printer and each filament slot from what the file
+/// itself records.
+///
+/// `slice_json` is a `SliceSummary` (from [`parse_slice_bytes`]).
+/// `candidate_printers_json`/`candidate_materials_json` are optional JSON
+/// arrays of profiles to search ahead of the built-in presets — pass the
+/// page's own saved profiles here, or `null` for built-ins only.
+/// `default_efficiency_factor` is the waste allowance given to a profile
+/// built from the file's own stated price (no slicer records one); `1.1`
+/// matches the built-in presets.
+///
+/// Returns `{ "job": Job, "printer": Match|null, "slots": [...] }` — the
+/// job is ready for [`calculate`], and `printer`/`slots` describe what was
+/// guessed and how confidently, so the page can show it and let the user
+/// correct it. A slot that matched nothing and had no price in the file is
+/// left out of the job, so costing it fails loudly rather than pricing it
+/// at zero.
+#[wasm_bindgen]
+pub fn auto_job(
+    name: &str,
+    slice_json: &str,
+    candidate_printers_json: Option<String>,
+    candidate_materials_json: Option<String>,
+    default_efficiency_factor: f64,
+) -> Result<String, JsError> {
+    let slice: SliceSummary =
+        serde_json::from_str(slice_json).map_err(|e| JsError::new(&format!("slice JSON: {e}")))?;
+    let printers: Vec<PrinterProfile> = parse_optional_array(candidate_printers_json, "printers")?;
+    let materials: Vec<MaterialProfile> =
+        parse_optional_array(candidate_materials_json, "materials")?;
+
+    let auto = lib_auto_job(
+        name,
+        slice.clone(),
+        slice,
+        printers.iter(),
+        materials.iter(),
+        default_efficiency_factor,
+    );
+
+    // `AutoJob`/`AutoSlot`/`Match` aren't `Serialize` (they carry no wire
+    // format of their own), so the shape is assembled here.
+    let slots: Vec<serde_json::Value> = auto
+        .slots
+        .iter()
+        .map(|slot| {
+            serde_json::json!({
+                "usage": slot.usage,
+                "matched": slot.matched.as_ref().map(|m| serde_json::json!({
+                    "profile": m.profile,
+                    "confidence": m.confidence,
+                    "matched_on": m.matched_on,
+                })),
+                "from_file": slot.from_file,
+            })
+        })
+        .collect();
+    let out = serde_json::json!({
+        "job": auto.job,
+        "printer": auto.printer.as_ref().map(|m| serde_json::json!({
+            "profile": m.profile,
+            "confidence": m.confidence,
+            "matched_on": m.matched_on,
+        })),
+        "slots": slots,
+    });
+    serde_json::to_string(&out).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// `null`/absent is an empty list; anything else must be a JSON array of
+/// profiles.
+fn parse_optional_array<T: serde::de::DeserializeOwned>(
+    json: Option<String>,
+    what: &str,
+) -> Result<Vec<T>, JsError> {
+    match json {
+        None => Ok(Vec::new()),
+        Some(text) if text.trim().is_empty() || text.trim() == "null" => Ok(Vec::new()),
+        Some(text) => serde_json::from_str(&text)
+            .map_err(|e| JsError::new(&format!("candidate {what} JSON: {e}"))),
+    }
+}
+
 /// Mirrors `libprintcalc::calculate`: costs a `job` (JSON) end to end,
 /// returning the `CostBreakdown` as JSON. The job's source must be an
 /// embedded `SliceSummary` — a browser has no filesystem to re-parse a
@@ -146,8 +230,9 @@ pub fn calculate(job_json: &str, defaults_json: Option<String>) -> Result<String
         ));
     }
     let defaults = match defaults_json {
-        Some(json) => serde_json::from_str(&json)
-            .map_err(|e| JsError::new(&format!("defaults JSON: {e}")))?,
+        Some(json) => {
+            serde_json::from_str(&json).map_err(|e| JsError::new(&format!("defaults JSON: {e}")))?
+        }
         None => CostDefaults::default(),
     };
     let breakdown = lib_calculate(&job, &defaults).map_err(|e| JsError::new(&e.to_string()))?;

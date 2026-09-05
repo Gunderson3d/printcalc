@@ -8,8 +8,8 @@ use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 use libprintcalc::model::cost::CostDefaults;
 use libprintcalc::model::filament::MaterialProfile;
@@ -80,7 +80,12 @@ pub fn filaments_dir() -> PathBuf {
 pub fn load_config() -> Result<CostDefaults, LibraryError> {
     let path = config_dir().join("config.toml");
     match fs::read_to_string(&path) {
-        Ok(text) => toml::from_str(&text).map_err(|e| LibraryError::Toml(e.to_string())),
+        Ok(text) => {
+            let (config, unknown) =
+                libprintcalc::parse_toml(&text).map_err(|e| LibraryError::Toml(e.to_string()))?;
+            warn_unknown_keys(&path, &unknown);
+            Ok(config)
+        }
         Err(_) => Ok(CostDefaults::default()),
     }
 }
@@ -94,6 +99,27 @@ pub fn save_config(config: &CostDefaults) -> Result<(), LibraryError> {
     let text = toml::to_string(config).map_err(|e| LibraryError::Toml(e.to_string()))?;
     fs::write(dir.join("config.toml"), text)?;
     Ok(())
+}
+
+/// Names every key in `path` that no field of the type being loaded
+/// claimed — a typo, a key in the wrong table, or a setting from a newer
+/// version. Written to stderr so it can't corrupt `--format json` output.
+///
+/// A warning, not an error: an unknown key just means something in the
+/// file did nothing, and refusing to load over it would strand a profile
+/// or job that's otherwise perfectly costable. It's worth saying out loud
+/// because the field it was meant to set silently took its default
+/// instead.
+pub fn warn_unknown_keys(path: &Path, keys: &[String]) {
+    if keys.is_empty() {
+        return;
+    }
+    let noun = if keys.len() == 1 { "key" } else { "keys" };
+    eprintln!(
+        "warning: unrecognized {noun} in {}: {} (ignored)",
+        path.display(),
+        keys.join(", ")
+    );
 }
 
 fn save_profile<T: Serialize>(dir: &Path, name: &str, profile: &T) -> Result<(), LibraryError> {
@@ -119,7 +145,10 @@ fn load_profile<T: DeserializeOwned>(
             LibraryError::Io(e)
         }
     })?;
-    toml::from_str(&text).map_err(|e| LibraryError::Toml(e.to_string()))
+    let (profile, unknown) =
+        libprintcalc::parse_toml(&text).map_err(|e| LibraryError::Toml(e.to_string()))?;
+    warn_unknown_keys(&path, &unknown);
+    Ok(profile)
 }
 
 fn list_profiles(dir: &Path) -> Result<Vec<String>, LibraryError> {

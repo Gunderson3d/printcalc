@@ -8,6 +8,7 @@ API for everything that works without a filesystem:
 - `parse_printer(printer_toml)` → `PrinterProfile` JSON
 - `parse_material(material_toml)` → `MaterialProfile` JSON
 - `new_job(name, source_json, printer_json, materials_json, labor_json?, hardware_json?)` → `Job` JSON
+- `auto_job(name, slice_json, printers_json?, materials_json?, efficiency_factor)` → `{ job, printer, slots }` JSON
 - `calculate(job_json, defaults_json?)` → `CostBreakdown` JSON
 - `calc_job(job_toml)` → `CostBreakdown` JSON (one-shot convenience)
 - `builtin_printers()` / `builtin_filaments()` → preset JSON arrays
@@ -20,6 +21,16 @@ Anything costed in the browser needs embedded profiles (or built-in
 preset names) and an embedded slice summary (`calc_job` requires a
 Bundled-tier job for both), since there's no library to resolve a `ref =`
 against and no sliced file to re-parse a `path =` against.
+
+`auto_job` is the short path from a dropped file to a price: hand it the
+`SliceSummary` from `parse_slice_bytes` and it builds a `Job` with the
+printer and every filament slot taken from what the file itself records,
+matched against the page's own saved profiles (pass them as JSON arrays)
+and then the built-in presets. It returns each guess with its
+`confidence` and what it `matched_on`, so the UI can show them and let
+the user correct any before calling `calculate`. It never guesses a
+price: a slot that matches nothing and states no price is left out, and
+costing fails naming it.
 
 ## Building the demo
 

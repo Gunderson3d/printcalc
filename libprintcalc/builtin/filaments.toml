@@ -2,5 +2,5 @@
 name = "pla-black"
 kind = "filament"
 price = 18.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 color = "black"

@@ -77,7 +77,9 @@ pub struct LaborCost {
     /// `None` => fall back to the global config default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rate_per_hour: Option<f64>,
-    /// Time actually spent on labor for this job.
+    /// Hands-on time per unit — setup, removal, support removal,
+    /// finishing. Multiplied by `Job::quantity` for the batch, so charging
+    /// a one-off setup across a batch means dividing it down yourself.
     pub minutes: f64,
 }
 
@@ -89,7 +91,10 @@ pub struct HardwareItem {
     pub name: String,
     /// Cost per unit.
     pub cost: f64,
-    /// How many were used.
+    /// How many were used **per unit** — 4 magnets per print stays 4
+    /// however large the batch, and `Job::quantity` scales it.
+    /// `PRICING.md`'s `n[j]`, which defaults to 1.
+    #[serde(default = "one")]
     pub quantity: u32,
 }
 
@@ -113,6 +118,14 @@ pub struct Job {
     /// Keyed by `FilamentUsage::slot_id`. `[material]` (singular) in TOML
     /// is sugar for a one-entry map under [`SINGLE_MATERIAL_SLOT`].
     pub material: HashMap<String, ProfileRef<MaterialProfile>>,
+    /// Priced for any used slot `material` doesn't cover. `None` means
+    /// every used slot must be mapped explicitly — the calc errors rather
+    /// than pricing an unmapped slot at zero.
+    pub default_material: Option<ProfileRef<MaterialProfile>>,
+    /// How many of this job are being made. All five cost components, and
+    /// so the total and the suggested prices, are for the whole batch.
+    /// `1` for a one-off.
+    pub quantity: u32,
     /// `None` => use each material profile's own `efficiency_factor`.
     pub material_efficiency_factor_override: Option<f64>,
     /// `None` => fall back to the global config default.
@@ -121,9 +134,10 @@ pub struct Job {
     pub labor: LaborCost,
     /// Extra flat costs beyond material/wear/electricity/labor.
     pub hardware: Vec<HardwareItem>,
-    /// `None` => fall back to the global config default (`[50.0, 60.0,
-    /// 70.0]`).
-    pub markup_percentages_override: Option<Vec<f64>>,
+    /// Gross margin percentages to suggest sale prices at. `None` => fall
+    /// back to the global config default (`[50.0, 60.0, 70.0]`). See
+    /// [`super::cost::SuggestedPrice`] — these are margins, not markups.
+    pub margin_percentages_override: Option<Vec<f64>>,
 }
 
 /// How much of a job to embed when serializing it with
@@ -203,6 +217,15 @@ impl Job {
                         )
                     })
                     .collect();
+                job.default_material = job
+                    .default_material
+                    .as_ref()
+                    .map(|r| {
+                        Ok::<_, Error>(ProfileRef::Embedded {
+                            profile: Box::new(crate::resolve_material(r)?),
+                        })
+                    })
+                    .transpose()?;
                 if tier == JobTier::Bundled {
                     job.source = JobSource::Embedded(self.slice_summary()?);
                 }
@@ -270,14 +293,32 @@ struct JobWire {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     materials: Option<HashMap<String, ProfileRef<MaterialProfile>>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    default_material: Option<ProfileRef<MaterialProfile>>,
+    #[serde(default = "one", skip_serializing_if = "is_one")]
+    quantity: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     material_efficiency_factor_override: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     electricity_cost_per_kwh_override: Option<f64>,
     labor: LaborCost,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     hardware: Vec<HardwareItem>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    markup_percentages_override: Option<Vec<f64>>,
+    #[serde(
+        default,
+        alias = "markup_percentages_override",
+        skip_serializing_if = "Option::is_none"
+    )]
+    margin_percentages_override: Option<Vec<f64>>,
+}
+
+/// `serde(default)` for `quantity` — a job file that doesn't mention it
+/// is a single unit.
+fn one() -> u32 {
+    1
+}
+
+fn is_one(quantity: &u32) -> bool {
+    *quantity == 1
 }
 
 impl<'de> Deserialize<'de> for Job {
@@ -315,9 +356,12 @@ impl<'de> Deserialize<'de> for Job {
         let material = match (wire.material, wire.materials) {
             (Some(single), None) => HashMap::from([(SINGLE_MATERIAL_SLOT.to_string(), single)]),
             (None, Some(map)) => map,
+            // A `[default_material]` on its own covers every slot, so it
+            // stands in for a per-slot map.
+            (None, None) if wire.default_material.is_some() => HashMap::new(),
             (None, None) => {
                 return Err(D::Error::custom(
-                    "job needs either `[material]` or `[materials]`",
+                    "job needs `[material]`, `[materials]`, or `[default_material]`",
                 ));
             }
             (Some(_), Some(_)) => {
@@ -333,11 +377,13 @@ impl<'de> Deserialize<'de> for Job {
             plate_selection,
             printer: wire.printer,
             material,
+            default_material: wire.default_material,
+            quantity: wire.quantity,
             material_efficiency_factor_override: wire.material_efficiency_factor_override,
             electricity_cost_per_kwh_override: wire.electricity_cost_per_kwh_override,
             labor: wire.labor,
             hardware: wire.hardware,
-            markup_percentages_override: wire.markup_percentages_override,
+            margin_percentages_override: wire.margin_percentages_override,
         })
     }
 }
@@ -373,11 +419,13 @@ impl Serialize for Job {
             printer: self.printer.clone(),
             material,
             materials,
+            default_material: self.default_material.clone(),
+            quantity: self.quantity,
             material_efficiency_factor_override: self.material_efficiency_factor_override,
             electricity_cost_per_kwh_override: self.electricity_cost_per_kwh_override,
             labor: self.labor,
             hardware: self.hardware.clone(),
-            markup_percentages_override: self.markup_percentages_override.clone(),
+            margin_percentages_override: self.margin_percentages_override.clone(),
         };
         wire.serialize(serializer)
     }
@@ -583,6 +631,7 @@ minutes = 10.0
         );
         let summary = SliceSummary {
             source_format: crate::formats::slice_summary::SourceFormat::Bambu3mf,
+            meta: Default::default(),
             plates: vec![],
         };
         assert_eq!(

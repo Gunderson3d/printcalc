@@ -1,13 +1,12 @@
 //! Bambu Studio `.gcode.3mf` parser.
 
-
 use std::collections::HashMap;
 use std::io::Cursor;
 
 use xml::attribute::OwnedAttribute;
 use xml::reader::{EventReader, XmlEvent};
 
-use super::slice_summary::{FilamentUsage, PlateSummary, SliceSummary, SourceFormat};
+use super::slice_summary::{FilamentUsage, PlateSummary, SliceMeta, SliceSummary, SourceFormat};
 use super::{ParseError, SliceParser, zip_read};
 
 /// [`SliceParser`] for Bambu Studio `.gcode.3mf` — see the module docs.
@@ -22,13 +21,21 @@ impl SliceParser for Bambu3mf {
     }
 
     fn parse(bytes: &[u8]) -> Result<SliceSummary, ParseError> {
-        let printer_model = read_printer_model(bytes);
+        let settings = read_project_settings(bytes).unwrap_or_default();
 
         let slice_info = zip_read::read_entry_to_string(bytes, "Metadata/slice_info.config")?;
-        let plates = parse_slice_info(&slice_info, printer_model.as_deref())?;
+        let mut plates = parse_slice_info(&slice_info, settings.printer_model.as_deref())?;
+        settings.describe_slots(&mut plates);
 
         Ok(SliceSummary {
             source_format: SourceFormat::Bambu3mf,
+            meta: SliceMeta {
+                printer_profile: settings.printer_profile,
+                print_profile: settings.print_profile,
+                printer_variant: settings.printer_variant,
+                nozzle_diameter: settings.nozzle_diameter,
+                slicer: read_slicer_version(&slice_info),
+            },
             plates,
         })
     }
@@ -41,14 +48,111 @@ fn looks_like_3mf_zip(bytes: &[u8]) -> bool {
     zip_read::has_entry(bytes, "3D/3dmodel.model")
 }
 
-/// Best-effort: a human-readable printer name from the project-wide
-/// settings (e.g. "Bambu Lab P2S"). `None` rather than an error if
-/// anything about this is missing or unparseable — it's a nice-to-have
-/// label, not required for costing.
-fn read_printer_model(bytes: &[u8]) -> Option<String> {
+/// Whatever `Metadata/project_settings.config` said about the setup: the
+/// printer and profile names, and the per-tray filament presets.
+///
+/// Bambu Studio stores the filament keys as arrays indexed by AMS tray
+/// *position*, i.e. `slice_info.config`'s `<filament id="N">` minus one,
+/// so `filament_settings_id[0]` describes tray 1. Everything is
+/// best-effort — a missing or unparseable settings file just leaves the
+/// summary as bare as it used to be, since none of this is needed to
+/// cost a job.
+#[derive(Default)]
+struct ProjectSettings {
+    printer_model: Option<String>,
+    printer_profile: Option<String>,
+    print_profile: Option<String>,
+    printer_variant: Option<String>,
+    nozzle_diameter: Option<f64>,
+    filament_profiles: Vec<String>,
+    filament_vendors: Vec<String>,
+    filament_prices: Vec<String>,
+    filament_densities: Vec<String>,
+}
+
+impl ProjectSettings {
+    /// Fills in each plate's `FilamentUsage` from the tray preset behind
+    /// its slot id. A slot id that isn't a 1-based tray number (or points
+    /// past the end of the arrays) is simply left as the slice_info
+    /// parser produced it.
+    fn describe_slots(&self, plates: &mut [PlateSummary]) {
+        for usage in plates.iter_mut().flat_map(|p| &mut p.filament_usage) {
+            let Some(i) = usage
+                .slot_id
+                .parse::<usize>()
+                .ok()
+                .and_then(|tray| tray.checked_sub(1))
+            else {
+                continue;
+            };
+            usage.profile_name = pick(&self.filament_profiles, i);
+            usage.vendor = pick(&self.filament_vendors, i);
+            usage.price = pick(&self.filament_prices, i).and_then(|s| s.parse().ok());
+            usage.density = pick(&self.filament_densities, i).and_then(|s| s.parse().ok());
+        }
+    }
+}
+
+fn pick(list: &[String], i: usize) -> Option<String> {
+    list.get(i).filter(|s| !s.is_empty()).cloned()
+}
+
+/// `project_settings.config` is JSON where nearly every value is either a
+/// string or an array of strings; these two helpers read whichever shape
+/// a key happens to use.
+fn json_str(value: &serde_json::Value, key: &str) -> Option<String> {
+    match value.get(key)? {
+        serde_json::Value::String(s) if !s.is_empty() => Some(s.clone()),
+        serde_json::Value::Array(items) => items
+            .first()
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(String::from),
+        _ => None,
+    }
+}
+
+fn json_str_array(value: &serde_json::Value, key: &str) -> Vec<String> {
+    match value.get(key) {
+        Some(serde_json::Value::Array(items)) => items
+            .iter()
+            .map(|v| v.as_str().unwrap_or_default().to_string())
+            .collect(),
+        Some(serde_json::Value::String(s)) => vec![s.clone()],
+        _ => Vec::new(),
+    }
+}
+
+/// Best-effort read of the project-wide settings. `None` rather than an
+/// error if anything about this is missing or unparseable — it's all
+/// nice-to-have labelling, not required for costing.
+fn read_project_settings(bytes: &[u8]) -> Option<ProjectSettings> {
     let text = zip_read::read_entry_to_string(bytes, "Metadata/project_settings.config").ok()?;
     let value: serde_json::Value = serde_json::from_str(&text).ok()?;
-    value.get("printer_model")?.as_str().map(String::from)
+    Some(ProjectSettings {
+        printer_model: json_str(&value, "printer_model"),
+        printer_profile: json_str(&value, "printer_settings_id"),
+        print_profile: json_str(&value, "print_settings_id"),
+        printer_variant: json_str(&value, "printer_variant"),
+        nozzle_diameter: json_str(&value, "nozzle_diameter").and_then(|s| s.parse().ok()),
+        filament_profiles: json_str_array(&value, "filament_settings_id"),
+        filament_vendors: json_str_array(&value, "filament_vendor"),
+        filament_prices: json_str_array(&value, "filament_cost"),
+        filament_densities: json_str_array(&value, "filament_density"),
+    })
+}
+
+/// `"BambuStudio 02.07.01.62"` from `slice_info.config`'s `<header>`, if
+/// it names a slicer client and version.
+fn read_slicer_version(slice_info: &str) -> Option<String> {
+    let version = slice_info
+        .split("X-BBL-Client-Version")
+        .nth(1)?
+        .split("value=\"")
+        .nth(1)?
+        .split('"')
+        .next()?;
+    (!version.is_empty()).then(|| format!("BambuStudio {version}"))
 }
 
 fn attr(attributes: &[OwnedAttribute], name: &str) -> Option<String> {
@@ -102,7 +206,8 @@ fn parse_slice_info(
                         material_type: attr(&attributes, "type"),
                         color: attr(&attributes, "color"),
                         grams: attr(&attributes, "used_g").and_then(|v| v.parse().ok()),
-                        ml: None,
+                        meters: attr(&attributes, "used_m").and_then(|v| v.parse().ok()),
+                        ..FilamentUsage::default()
                     });
                 }
                 _ => {}
@@ -171,6 +276,42 @@ mod tests {
         assert_eq!(usage.color.as_deref(), Some("#AE6342"));
         assert_eq!(usage.grams, Some(6.66));
         assert_eq!(usage.ml, None);
+    }
+
+    /// `project_settings.config` names the printer profile, and one
+    /// filament preset per AMS tray — tray N describes slot id "N".
+    #[test]
+    fn reads_project_settings_into_meta_and_slots() {
+        let bytes = read_test_file("single_plate_multicolor.gcode.3mf");
+        let summary = Bambu3mf::parse(&bytes).unwrap();
+
+        assert_eq!(
+            summary.meta.printer_profile.as_deref(),
+            Some("Bambu Lab P2S 0.4 nozzle")
+        );
+        assert_eq!(
+            summary.meta.print_profile.as_deref(),
+            Some("0.24mm Standard @BBL P2S")
+        );
+        assert_eq!(summary.meta.nozzle_diameter, Some(0.4));
+        assert_eq!(
+            summary.meta.slicer.as_deref(),
+            Some("BambuStudio 02.07.01.62")
+        );
+
+        let usage = &summary.plates[0].filament_usage;
+        assert_eq!(usage.len(), 2);
+        for (i, u) in usage.iter().enumerate() {
+            assert_eq!(u.slot_id, (i + 1).to_string());
+            assert_eq!(u.profile_name.as_deref(), Some("Bambu PLA Basic @BBL P2S"));
+            assert_eq!(u.vendor.as_deref(), Some("Bambu Lab"));
+            assert_eq!(u.price, Some(24.99));
+            assert_eq!(u.density, Some(1.26));
+        }
+        // Distinct per tray even though both trays hold the same preset.
+        assert_eq!(usage[0].color.as_deref(), Some("#AE6342"));
+        assert_eq!(usage[1].color.as_deref(), Some("#F8F4EF"));
+        assert_eq!(usage[0].meters, Some(1.60));
     }
 
     #[test]

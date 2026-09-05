@@ -152,6 +152,7 @@ efficiency_factor = 1.1
                     annual_maintenance_cost: 20.0,
                     power_consumption_watts: 60.0,
                     cost_buffer_factor: 1.2,
+                    print_time_rate_override: None,
                 },
             ),
             std::collections::HashMap::new(),

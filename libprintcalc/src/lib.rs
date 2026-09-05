@@ -22,6 +22,11 @@
 //! - [`new_job`] builds a [`Job`] from a sliced-file path (or an
 //!   already-parsed [`SliceSummary`]) and an embedded printer profile —
 //!   no lookups, can't fail.
+//! - [`auto_job`] goes further and builds one from the sliced file
+//!   *alone*, matching the printer and each filament slot against the
+//!   presets from the names the slicer recorded, and falling back to the
+//!   file's own stated filament price when nothing matches. See
+//!   [`matching`].
 //! - [`calculate`] costs a job, pulling its slice data via
 //!   `Job::slice_summary` and resolving `Embedded` profile refs straight
 //!   through and `Linked` ones against the [`builtin`] presets. All of the
@@ -47,15 +52,15 @@
 //! // Normally the output of `libprintcalc::parse_slice_bytes(bytes, filename)`.
 //! let slice = SliceSummary {
 //!     source_format: SourceFormat::Bambu3mf,
+//!     meta: Default::default(),
 //!     plates: vec![PlateSummary {
 //!         plate_index: 1,
 //!         print_time_seconds: 1037.0,
 //!         filament_usage: vec![FilamentUsage {
 //!             slot_id: SINGLE_MATERIAL_SLOT.to_string(),
 //!             material_type: Some("PLA".to_string()),
-//!             color: None,
 //!             grams: Some(6.66),
-//!             ml: None,
+//!             ..Default::default()
 //!         }],
 //!         printer_model: None,
 //!         layer_height: None,
@@ -74,6 +79,7 @@
 //!         annual_maintenance_cost: 80.0,
 //!         power_consumption_watts: 160.0,
 //!         cost_buffer_factor: 1.3,
+//!         print_time_rate_override: None,
 //!     },
 //! };
 //! let filament = MaterialProfile {
@@ -94,20 +100,28 @@
 //!         SINGLE_MATERIAL_SLOT.to_string(),
 //!         ProfileRef::Linked { name: "pla-black".to_string() },
 //!     )]),
+//!     default_material: None,
+//!     quantity: 1,
 //!     material_efficiency_factor_override: None,
 //!     electricity_cost_per_kwh_override: None,
 //!     labor: LaborCost { rate_per_hour: Some(15.0), minutes: 10.0 },
 //!     hardware: vec![],
-//!     markup_percentages_override: None,
+//!     margin_percentages_override: None,
 //! };
 //!
 //! // In a real app, the caller resolves `job.printer`/`job.material`
 //! // (which may be `Linked` refs) first; here they're already resolved,
 //! // so `calculate_cost` is called directly.
 //! let material_profiles = HashMap::from([(SINGLE_MATERIAL_SLOT.to_string(), filament)]);
-//! let breakdown =
-//!     calculate_cost(&job, &slice, &printer, &material_profiles, &CostDefaults::default())
-//!         .expect("printer/filament kinds match the sliced file, and every used slot is priced");
+//! let breakdown = calculate_cost(
+//!     &job,
+//!     &slice,
+//!     &printer,
+//!     &material_profiles,
+//!     None, // no `default_material` — every used slot is mapped above
+//!     &CostDefaults::default(),
+//! )
+//! .expect("printer/filament kinds match the sliced file, and every used slot is priced");
 //! assert!(breakdown.total_cost > 0.0);
 //! ```
 
@@ -117,13 +131,19 @@ use std::fmt;
 pub mod builtin;
 pub mod disk;
 pub mod formats;
+pub mod matching;
 pub mod model;
 
 pub use disk::{read_job, read_material, read_printer, read_slice_file};
 pub use formats::ParseError;
 pub use formats::parse_slice_bytes;
-pub use formats::slice_summary::{FilamentUsage, PlateSummary, SliceSummary, SourceFormat};
-pub use model::cost::{CalcError, CostBreakdown, CostDefaults, calculate_cost};
+pub use formats::slice_summary::{
+    FilamentUsage, PlateSummary, SliceMeta, SliceSummary, SlotUsage, SourceFormat,
+};
+pub use matching::{Match, match_material, match_printer, material_from_slot};
+pub use model::cost::{
+    CalcError, CostBreakdown, CostDefaults, SuggestedPrice, UnmappedSlot, calculate_cost,
+};
 pub use model::filament::{MaterialKind, MaterialProfile};
 pub use model::job::{
     HardwareItem, Job, JobSource, JobTier, LaborCost, ProfileRef, SINGLE_MATERIAL_SLOT,
@@ -200,21 +220,56 @@ impl From<CalcError> for Error {
 /// what `printcalc-wasm` uses (no filesystem to load a job file from at
 /// all) and what the CLI's `load_job` calls after reading the file.
 pub fn parse_job(text: &str) -> Result<Job, Error> {
-    toml::from_str(text).map_err(|e| Error::Toml(e.to_string()))
+    parse_toml(text).map(|(job, _)| job)
 }
 
 /// Parses printer profile TOML already in hand — the same format
 /// [`read_printer`] loads from disk and the CLI saves into its
 /// profile library.
 pub fn parse_printer(text: &str) -> Result<PrinterProfile, Error> {
-    toml::from_str(text).map_err(|e| Error::Toml(e.to_string()))
+    parse_toml(text).map(|(printer, _)| printer)
 }
 
 /// Parses filament/resin profile TOML already in hand — the same format
 /// [`read_material`] loads from disk and the CLI saves into its
 /// profile library.
 pub fn parse_material(text: &str) -> Result<MaterialProfile, Error> {
-    toml::from_str(text).map_err(|e| Error::Toml(e.to_string()))
+    parse_toml(text).map(|(material, _)| material)
+}
+
+/// Parses TOML into `T`, also reporting every key in it that no field of
+/// `T` claimed — a typo (`purchase_pric`), a key in the wrong table, or a
+/// setting from a version that knew more than this one.
+///
+/// Unknown keys are reported, never rejected: a profile or job still
+/// parses, so a stray key can't stop a job costing. Paths are dotted,
+/// with array elements indexed (`labor.rat`, `hardware.0.qty`); the order
+/// is the deserializer's, not the file's. The plain
+/// [`parse_job`]/[`parse_printer`]/[`parse_material`] wrappers discard the
+/// list; callers that can show a warning — the CLI does — should use this
+/// instead.
+///
+/// One blind spot: a key inside a `[printer]`/`[material]` reference in a
+/// job file is invisible here, because those are untagged enums and serde
+/// buffers their contents. A wrong key there usually fails the parse
+/// outright instead, which is its own kind of loud.
+///
+/// ```
+/// # use libprintcalc::{parse_toml, model::printer::PrinterProfile};
+/// let (printer, unknown) = parse_toml::<PrinterProfile>(
+///     "name = \"a1\"\nkind = \"fdm\"\npurchase_pric = 699.0\n",
+/// )
+/// .unwrap();
+/// // The typo'd key didn't set anything, so the field kept its default.
+/// assert_eq!(printer.wear.purchase_price, 800.0);
+/// assert_eq!(unknown, ["purchase_pric"]);
+/// ```
+pub fn parse_toml<T: serde::de::DeserializeOwned>(text: &str) -> Result<(T, Vec<String>), Error> {
+    let mut unknown = Vec::new();
+    let deserializer = toml::Deserializer::parse(text).map_err(|e| Error::Toml(e.to_string()))?;
+    let value = serde_ignored::deserialize(deserializer, |path| unknown.push(path.to_string()))
+        .map_err(|e| Error::Toml(e.to_string()))?;
+    Ok((value, unknown))
 }
 
 /// Builds a printer profile from its parts — the same shape
@@ -277,6 +332,8 @@ pub fn new_job(
             profile: Box::new(printer),
         },
         material: materials,
+        default_material: None,
+        quantity: 1,
         material_efficiency_factor_override: None,
         electricity_cost_per_kwh_override: None,
         labor: labor.unwrap_or(LaborCost {
@@ -284,7 +341,157 @@ pub fn new_job(
             minutes: 0.0,
         }),
         hardware,
-        markup_percentages_override: None,
+        margin_percentages_override: None,
+    }
+}
+
+/// What [`auto_job`] worked out about a sliced file, alongside the job it
+/// built. Everything here is a *guess* from the file's own metadata — the
+/// caller should show it and let the user override before costing.
+#[derive(Debug, Clone)]
+pub struct AutoJob {
+    /// The built job. Its printer and every matched slot are embedded by
+    /// value, so it costs without any library lookup.
+    pub job: Job,
+    /// The parsed sliced file, handed back so the caller needn't re-parse.
+    pub slice: SliceSummary,
+    /// The printer guessed from the file, if one matched.
+    pub printer: Option<Match<PrinterProfile>>,
+    /// One entry per used slot, in slot order: what the file said about
+    /// it and what that resolved to.
+    pub slots: Vec<AutoSlot>,
+}
+
+/// How one filament slot got priced by [`auto_job`].
+#[derive(Debug, Clone)]
+pub struct AutoSlot {
+    /// The slot's usage and whatever the slicer said about it.
+    pub usage: SlotUsage,
+    /// A stored/built-in profile that matched the slicer's names.
+    pub matched: Option<Match<MaterialProfile>>,
+    /// A profile built from the file's own stated price, used when
+    /// `matched` is `None`. Both `None` means the slot is unpriced and
+    /// the caller has to supply a profile before the job will cost.
+    pub from_file: Option<MaterialProfile>,
+}
+
+impl AutoSlot {
+    /// The profile this slot ended up with, if any — the match first,
+    /// then the file's own numbers.
+    pub fn profile(&self) -> Option<&MaterialProfile> {
+        self.matched
+            .as_ref()
+            .map(|m| &m.profile)
+            .or(self.from_file.as_ref())
+    }
+}
+
+/// Builds a [`Job`] from a sliced file alone, taking every value it can
+/// from the file itself.
+///
+/// Sliced files already record which printer they were sliced for and
+/// what sat in each filament slot — often down to the vendor's own
+/// profile name and its price per kilo. This reads all of that and turns
+/// it into a costable job:
+///
+/// - the printer profile is matched from `printer_settings_id` /
+///   `printer_model` against `candidate_printers` then the [`builtin`]
+///   presets;
+/// - each used slot is matched from the slicer's filament profile name,
+///   vendor and material family against `candidate_materials` then the
+///   built-ins;
+/// - a slot nothing matched falls back to a profile built from the file's
+///   own stated price (see [`matching::material_from_slot`]), using
+///   `default_efficiency_factor` for the waste allowance no slicer
+///   records.
+///
+/// Nothing here is authoritative — matches are guesses, reported in
+/// [`AutoJob`] with their confidence so a caller can show them and let
+/// the user correct them. A slot that ends up with no profile at all is
+/// simply left out of `job.material`, so costing it fails loudly with
+/// [`CalcError::MissingMaterial`] rather than quietly pricing it at zero.
+///
+/// `source` is the job's [`JobSource`]: a path (re-parsed at calc time)
+/// or the summary itself. When it's a path, `slice` must be that file's
+/// already-parsed summary — [`read_slice_file`] produces it.
+pub fn auto_job<'a>(
+    name: impl Into<String>,
+    source: impl Into<JobSource>,
+    slice: SliceSummary,
+    candidate_printers: impl IntoIterator<Item = &'a PrinterProfile>,
+    candidate_materials: impl IntoIterator<Item = &'a MaterialProfile>,
+    default_efficiency_factor: f64,
+) -> AutoJob {
+    let format = slice.source_format;
+    let printer_kind = model::cost::printer_kind_for(format);
+    let material_kind = model::cost::material_kind_for(format);
+
+    let printer = matching::match_printer(&slice, candidate_printers, printer_kind);
+
+    // Collected once: `match_material` is called per slot, and the
+    // candidate iterator is consumed by the first call otherwise.
+    let materials: Vec<&MaterialProfile> = candidate_materials.into_iter().collect();
+    let slots: Vec<AutoSlot> = slice
+        .slots()
+        .into_iter()
+        .map(|usage| {
+            let matched =
+                matching::match_material(&usage, materials.iter().copied(), material_kind);
+            let from_file = matched.is_none().then(|| {
+                matching::material_from_slot(&usage, material_kind, default_efficiency_factor)
+            });
+            AutoSlot {
+                usage,
+                matched,
+                from_file: from_file.flatten(),
+            }
+        })
+        .collect();
+
+    let material: HashMap<String, ProfileRef<MaterialProfile>> = slots
+        .iter()
+        .filter_map(|slot| {
+            let profile = slot.profile()?;
+            Some((
+                slot.usage.slot_id.clone(),
+                ProfileRef::Embedded {
+                    profile: Box::new(profile.clone()),
+                },
+            ))
+        })
+        .collect();
+
+    // No printer matched: embed a clearly-named placeholder rather than
+    // inventing plausible depreciation numbers. Its zeroed wear profile
+    // charges nothing for the machine, and `AutoJob::printer` being
+    // `None` is how the caller knows to ask.
+    let printer_profile = printer
+        .as_ref()
+        .map(|m| m.profile.clone())
+        .unwrap_or_else(|| PrinterProfile {
+            name: slice
+                .printer_model()
+                .unwrap_or("unknown printer")
+                .to_string(),
+            kind: printer_kind,
+            wear: WearProfile {
+                purchase_price: 0.0,
+                additional_upfront_cost: 0.0,
+                estimated_life_years: 0.0,
+                estimated_uptime_percent: 0.0,
+                annual_maintenance_cost: 0.0,
+                power_consumption_watts: 0.0,
+                cost_buffer_factor: 1.0,
+                print_time_rate_override: None,
+            },
+        });
+
+    let job = new_job(name, source, printer_profile, material, None, Vec::new());
+    AutoJob {
+        job,
+        slice,
+        printer,
+        slots,
     }
 }
 
@@ -302,11 +509,17 @@ pub fn calculate(job: &Job, defaults: &CostDefaults) -> Result<CostBreakdown, Er
     let slice = job.slice_summary()?;
     let printer = resolve_printer(&job.printer)?;
     let material_profiles = resolve_materials(&job.material)?;
+    let default_material = job
+        .default_material
+        .as_ref()
+        .map(resolve_material)
+        .transpose()?;
     Ok(cost::calculate_cost(
         job,
         &slice,
         &printer,
         &material_profiles,
+        default_material.as_ref(),
         defaults,
     )?)
 }
@@ -327,24 +540,27 @@ pub(crate) fn resolve_printer(
     }
 }
 
+pub(crate) fn resolve_material(
+    material_ref: &ProfileRef<MaterialProfile>,
+) -> Result<MaterialProfile, Error> {
+    match material_ref {
+        ProfileRef::Embedded { profile } => Ok((**profile).clone()),
+        ProfileRef::Linked { name } => {
+            builtin::filament(name)
+                .cloned()
+                .ok_or_else(|| Error::ProfileNotFound {
+                    kind: "filament",
+                    name: name.clone(),
+                })
+        }
+    }
+}
+
 pub(crate) fn resolve_materials(
     map: &HashMap<String, ProfileRef<MaterialProfile>>,
 ) -> Result<HashMap<String, MaterialProfile>, Error> {
     map.iter()
-        .map(|(slot, r)| {
-            let profile = match r {
-                ProfileRef::Embedded { profile } => (**profile).clone(),
-                ProfileRef::Linked { name } => {
-                    builtin::filament(name)
-                        .cloned()
-                        .ok_or_else(|| Error::ProfileNotFound {
-                            kind: "filament",
-                            name: name.clone(),
-                        })?
-                }
-            };
-            Ok((slot.clone(), profile))
-        })
+        .map(|(slot, r)| Ok((slot.clone(), resolve_material(r)?)))
         .collect()
 }
 
@@ -361,6 +577,7 @@ mod tests {
             annual_maintenance_cost: 50.0,
             power_consumption_watts: 150.0,
             cost_buffer_factor: 1.2,
+            print_time_rate_override: None,
         }
     }
 
@@ -370,15 +587,15 @@ mod tests {
     fn calculate_resolves_embedded_profiles() {
         let slice = SliceSummary {
             source_format: SourceFormat::PrusaSl1,
+            meta: Default::default(),
             plates: vec![PlateSummary {
                 plate_index: 1,
                 print_time_seconds: 3600.0,
                 filament_usage: vec![FilamentUsage {
                     slot_id: SINGLE_MATERIAL_SLOT.into(),
                     material_type: Some("Resin".into()),
-                    color: None,
-                    grams: None,
                     ml: Some(10.0),
+                    ..Default::default()
                 }],
                 printer_model: None,
                 layer_height: None,
@@ -413,6 +630,8 @@ mod tests {
                     )),
                 },
             )]),
+            default_material: None,
+            quantity: 1,
             material_efficiency_factor_override: None,
             electricity_cost_per_kwh_override: None,
             labor: LaborCost {
@@ -420,7 +639,7 @@ mod tests {
                 minutes: 20.0,
             },
             hardware: Vec::new(),
-            markup_percentages_override: None,
+            margin_percentages_override: None,
         };
 
         let breakdown = calculate(&job, &CostDefaults::default()).unwrap();
@@ -429,6 +648,78 @@ mod tests {
         assert!((breakdown.material_cost - 0.40).abs() < 1e-9);
         // 20 minutes @ the default $15/hr
         assert!((breakdown.labor_cost - 5.0).abs() < 1e-9);
+    }
+
+    /// A Bambu 3MF names its printer and its AMS presets, so `auto_job`
+    /// costs it end to end with nothing supplied by the caller.
+    #[cfg(feature = "bambu")]
+    #[test]
+    fn auto_job_costs_a_bambu_file_with_nothing_supplied() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../Testfiles/single_plate_multicolor.gcode.3mf");
+        let slice = read_slice_file(&path).unwrap();
+
+        let auto = auto_job("multicolor", slice.clone(), slice, [], [], 1.1);
+
+        let printer = auto.printer.expect("the file names a Bambu P2S");
+        assert_eq!(printer.profile.name, "bambu-p2s");
+        assert_eq!(auto.slots.len(), 2);
+        for slot in &auto.slots {
+            let matched = slot.matched.as_ref().expect("Bambu PLA Basic is built in");
+            assert_eq!(matched.profile.name, "bambu-pla-basic");
+            assert_eq!(matched.confidence, 1.0);
+        }
+
+        let breakdown = calculate(&auto.job, &CostDefaults::default()).unwrap();
+        assert!(breakdown.material_cost > 0.0);
+        assert!(breakdown.wear_cost > 0.0);
+    }
+
+    /// PrusaSlicer output names a *generic* filament no preset matches,
+    /// but states its price per kilo — so the slot is costed from the
+    /// file itself rather than left unpriced.
+    #[cfg(feature = "gcode")]
+    #[test]
+    fn auto_job_falls_back_to_the_files_own_filament_price() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../Testfiles/Cube_0.2mm_PLA_Prusa MINI_20m7s.gcode");
+        let slice = read_slice_file(&path).unwrap();
+
+        let auto = auto_job("cube", path.clone(), slice, [], [], 1.1);
+
+        assert_eq!(auto.slots.len(), 1);
+        let slot = &auto.slots[0];
+        assert!(slot.matched.is_none(), "no preset is a Generic PLA");
+        let from_file = slot.from_file.as_ref().expect("the file states $20/kg");
+        assert_eq!(from_file.price, 20.0);
+        assert_eq!(from_file.efficiency_factor, 1.1);
+
+        // 3.10g * 1.1 * $20/kg
+        let breakdown = calculate(&auto.job, &CostDefaults::default()).unwrap();
+        assert!((breakdown.material_cost - 0.0682).abs() < 1e-4);
+    }
+
+    /// A caller's own profiles are searched ahead of the built-ins, so a
+    /// saved profile's price is the one that gets used.
+    #[cfg(feature = "bambu")]
+    #[test]
+    fn auto_job_prefers_caller_supplied_profiles() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../Testfiles/single_plate.gcode.3mf");
+        let slice = read_slice_file(&path).unwrap();
+        let mine = create_material(
+            "Bambu PLA Basic",
+            MaterialKind::Filament,
+            9.99,
+            1.0,
+            None,
+            Some("Bambu Lab".to_string()),
+        );
+
+        let auto = auto_job("widget", slice.clone(), slice, [], [&mine], 1.1);
+
+        let matched = auto.slots[0].matched.as_ref().unwrap();
+        assert_eq!(matched.profile.price, 9.99);
     }
 
     /// A `Linked` ref naming no built-in preset is a `ProfileNotFound` —
@@ -658,6 +949,8 @@ efficiency_factor = 1.1
                     name: "generic-resin-grey".into(),
                 },
             )]),
+            default_material: None,
+            quantity: 1,
             material_efficiency_factor_override: None,
             electricity_cost_per_kwh_override: None,
             labor: LaborCost {
@@ -665,7 +958,7 @@ efficiency_factor = 1.1
                 minutes: 10.0,
             },
             hardware: Vec::new(),
-            markup_percentages_override: None,
+            margin_percentages_override: None,
         }
     }
 

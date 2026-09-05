@@ -7,10 +7,13 @@ use std::path::PathBuf;
 
 use clap::ValueEnum;
 
+use libprintcalc::formats::slice_summary::{SliceSummary, SlotUsage};
 use libprintcalc::model::cost::CostBreakdown;
+use libprintcalc::model::filament::MaterialProfile;
+use libprintcalc::model::printer::PrinterProfile;
 
 use crate::interactive;
-use crate::ops::{self, JobTier, NewJobParams};
+use crate::ops::{self, JobTier, NewJobParams, ProfileChoice};
 
 #[derive(Clone, Copy, ValueEnum)]
 pub enum OutputFormat {
@@ -49,6 +52,9 @@ pub struct JobInvocation {
     /// `slot=name,slot=name,...` — one filament per AMS tray / extruder.
     /// Slots it doesn't cover fall back to `filament`, if given.
     pub filament_map: Option<String>,
+    /// Stored on the job as its fallback for any slot still unmapped at
+    /// calc time, rather than expanded per slot like `filament`.
+    pub default_filament: Option<String>,
     pub output: Option<PathBuf>,
     pub job_type: JobType,
     /// "all" (default) or a plate number; ignored with a warning for
@@ -56,6 +62,11 @@ pub struct JobInvocation {
     pub plate: Option<String>,
     pub labor_minutes: Option<f64>,
     pub labor_rate: Option<f64>,
+    /// How many units to price. All costs and prices are for the batch.
+    pub quantity: u32,
+    /// Skip reading the printer/filament the sliced file names, and ask
+    /// (or fail) as if it said nothing.
+    pub no_detect: bool,
     pub format: OutputFormat,
     pub interactive: bool,
     /// Re-tier an existing job (`full` or `bundled` only) instead of
@@ -103,15 +114,31 @@ fn new_job_flow(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
     let slice = ops::parse_slice(&inv.file)?;
     let plate_selection = parse_plate(inv.plate.as_deref())?;
 
-    let printer_name = interactive::require_choice(
-        inv.printer,
-        "printer",
-        "Printer profile name",
+    // Parsed up front so detection can tell which slots a flag already
+    // covers and stay quiet about those.
+    let mapped: HashMap<String, ProfileChoice<MaterialProfile>> = match &inv.filament_map {
+        Some(s) => parse_filament_map(s)?,
+        None => HashMap::new(),
+    };
+
+    // What the sliced file itself says about the setup. Explicit flags
+    // still win; this only fills in what wasn't passed, and only reports
+    // on what it might actually be used for.
+    let detected = (!inv.no_detect).then(|| ops::detect_profiles(&slice));
+    if let Some(detected) = &detected {
+        let covered = |slot: &str| inv.filament.is_some() || mapped.contains_key(slot);
+        print_detected(&inv.file, &slice, detected, inv.printer.is_none(), &covered);
+    }
+
+    let printer = resolve_printer_choice(inv.printer, detected.as_ref(), inv.interactive)?;
+    let filaments = resolve_filaments(
+        &slice,
+        detected.as_ref(),
+        inv.filament,
+        mapped,
+        inv.default_filament.is_some(),
         inv.interactive,
-        &ops::list_printers().unwrap_or_default(),
     )?;
-    let filament_names =
-        resolve_filament_names(&slice, inv.filament, inv.filament_map, inv.interactive)?;
     // No prompt: unlike printer/filament, omitting this just means no
     // labor cost rather than something that needs asking about.
     let labor_minutes = inv.labor_minutes.unwrap_or(0.0);
@@ -135,8 +162,10 @@ fn new_job_flow(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
         NewJobParams {
             name,
             slice_path: inv.file.clone(),
-            printer_name,
-            filament_names,
+            printer,
+            filaments,
+            default_filament: inv.default_filament.map(ProfileChoice::Named),
+            quantity: inv.quantity,
             plate_selection,
             labor_minutes,
             labor_rate_per_hour: labor_rate,
@@ -161,6 +190,206 @@ fn new_job_flow(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Everything the sliced file identified, on stderr so `--format json`
+/// keeps stdout clean. Nothing here is authoritative — it's shown so a
+/// wrong guess is visible before it silently prices the job.
+///
+/// Only what might actually get used is reported: `want_printer` and
+/// `want_slot` are false for anything an explicit flag already covers,
+/// since printing a guess that's about to be overridden is just
+/// misleading.
+fn print_detected(
+    path: &std::path::Path,
+    slice: &SliceSummary,
+    detected: &ops::Detected,
+    want_printer: bool,
+    want_slot: &dyn Fn(&str) -> bool,
+) {
+    let mut lines: Vec<String> = Vec::new();
+
+    if let Some(slicer) = &slice.meta.slicer {
+        lines.push(format!("  slicer:   {slicer}"));
+    }
+    if want_printer {
+        let model = slice
+            .meta
+            .printer_profile
+            .as_deref()
+            .or_else(|| slice.printer_model());
+        match (&detected.printer, model) {
+            (Some(m), _) => lines.push(format!(
+                "  printer:  {} -> {} ({})",
+                m.matched_on,
+                m.profile.name,
+                confidence_label(m.confidence)
+            )),
+            (None, Some(model)) => {
+                lines.push(format!("  printer:  {model} -> no matching profile"))
+            }
+            (None, None) => {}
+        }
+    }
+    for slot in &detected.slots {
+        if want_slot(&slot.usage.slot_id) {
+            continue;
+        }
+        let described = slot.usage.label();
+        lines.push(match (&slot.matched, &slot.from_file) {
+            (Some(m), _) => format!(
+                "  {described} -> {} ({})",
+                m.profile.name,
+                confidence_label(m.confidence)
+            ),
+            (None, Some(profile)) => format!(
+                "  {described} -> priced from the file at ${:.2}/{}",
+                profile.price,
+                if slot.usage.ml > 0.0 { "L" } else { "kg" }
+            ),
+            (None, None) => format!("  {described} -> no matching profile"),
+        });
+    }
+
+    if lines.is_empty() {
+        return;
+    }
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("sliced file");
+    eprintln!("detected from {name}");
+    for line in lines {
+        eprintln!("{line}");
+    }
+}
+
+/// "exact" is reserved for a name that matched outright; everything else
+/// says "guess" so a near-miss is never mistaken for a certainty.
+fn confidence_label(confidence: f64) -> &'static str {
+    if confidence >= 0.999 {
+        "exact"
+    } else {
+        "guess"
+    }
+}
+
+/// `--printer` if given, else the detected match, else a prompt (or, under
+/// `--no-input`, an error naming the flag).
+fn resolve_printer_choice(
+    flag: Option<String>,
+    detected: Option<&ops::Detected>,
+    interactive_mode: bool,
+) -> Result<ProfileChoice<PrinterProfile>, Box<dyn Error>> {
+    if let Some(name) = flag {
+        return Ok(ProfileChoice::Named(name));
+    }
+    if let Some(matched) = detected.and_then(|d| d.printer.as_ref()) {
+        return Ok(ProfileChoice::Named(matched.profile.name.clone()));
+    }
+    let name = interactive::require_choice(
+        None,
+        "printer",
+        "Printer profile name",
+        interactive_mode,
+        &ops::list_printers().unwrap_or_default(),
+    )?;
+    Ok(ProfileChoice::Named(name))
+}
+
+/// Builds the slot_id -> filament map for a new job, most specific source
+/// first: `map` (already parsed from `--filament-map`), then `--filament`
+/// as a default for the rest, then whatever the sliced file identified,
+/// then a prompt per remaining slot (or, under `--no-input`, an error
+/// naming what's still unpriced).
+///
+/// `has_default` is `--default-filament`: it's stored on the job rather
+/// than expanded here, but it does mean an unmapped slot isn't a problem
+/// worth asking about.
+fn resolve_filaments(
+    slice: &SliceSummary,
+    detected: Option<&ops::Detected>,
+    filament: Option<String>,
+    mut map: HashMap<String, ProfileChoice<MaterialProfile>>,
+    has_default: bool,
+    interactive_mode: bool,
+) -> Result<HashMap<String, ProfileChoice<MaterialProfile>>, Box<dyn Error>> {
+    let slots = slice.slots();
+
+    // A slice with no usage at all still needs somewhere to put the one
+    // filament the user names.
+    let slot_ids: Vec<String> = if slots.is_empty() {
+        vec!["1".to_string()]
+    } else {
+        slots.iter().map(|s| s.slot_id.clone()).collect()
+    };
+
+    if let Some(default_name) = &filament {
+        for slot in &slot_ids {
+            map.entry(slot.clone())
+                .or_insert_with(|| ProfileChoice::Named(default_name.clone()));
+        }
+    }
+
+    for slot in detected.map(|d| d.slots.as_slice()).unwrap_or_default() {
+        if let Some(profile) = slot.profile() {
+            map.entry(slot.usage.slot_id.clone()).or_insert_with(|| {
+                // A matched library/built-in profile keeps its name so the
+                // job can link it; one built from the file's own numbers
+                // has no name to link and travels by value.
+                match &slot.matched {
+                    Some(m) => ProfileChoice::Named(m.profile.name.clone()),
+                    None => ProfileChoice::Profile(Box::new(profile.clone())),
+                }
+            });
+        }
+    }
+
+    let missing: Vec<&SlotUsage> = slots
+        .iter()
+        .filter(|slot| !map.contains_key(&slot.slot_id))
+        .collect();
+    if missing.is_empty() || has_default {
+        // Nothing named and nothing detected: the single-slot case still
+        // deserves the plain, un-slot-labeled prompt.
+        if map.is_empty() && !has_default {
+            let name = interactive::require_choice(
+                None,
+                "filament",
+                "Filament profile name",
+                interactive_mode,
+                &ops::list_filaments().unwrap_or_default(),
+            )?;
+            return Ok(HashMap::from([(
+                slot_ids[0].clone(),
+                ProfileChoice::Named(name),
+            )]));
+        }
+        return Ok(map);
+    }
+
+    if !interactive_mode {
+        let listed: Vec<String> = missing.iter().map(|s| s.label()).collect();
+        return Err(format!(
+            "no filament for {}; pass --filament as a default, or --filament-map slot=name,... per slot",
+            listed.join(", ")
+        )
+        .into());
+    }
+
+    let choices = ops::list_filaments().unwrap_or_default();
+    for slot in missing {
+        // One slot and nothing else in play reads better without the
+        // slot label, same as it always has.
+        let label = if slots.len() == 1 {
+            "Filament profile name".to_string()
+        } else {
+            format!("Filament profile for {}", slot.label())
+        };
+        let name = interactive::require_choice(None, "filament", &label, true, &choices)?;
+        map.insert(slot.slot_id.clone(), ProfileChoice::Named(name));
+    }
+    Ok(map)
+}
+
 fn parse_plate(plate: Option<&str>) -> Result<Option<u32>, Box<dyn Error>> {
     match plate {
         None | Some("all") => Ok(None),
@@ -181,81 +410,18 @@ fn parse_plate_override(plate: Option<&str>) -> Result<Option<Option<u32>>, Box<
     }
 }
 
-/// Builds the slot_id -> filament name map for a new job. `--filament-map`
-/// (`slot=name` pairs) sets specific slots; `--filament` fills in a default
-/// for any slot `--filament-map` didn't cover (or every slot, if
-/// `--filament-map` wasn't given at all) — both just build the same
-/// underlying map. When neither covers a slot, `--interactive` prompts for
-/// it (per-slot, labeled by slot id) unless the slice actually has just one
-/// real `FilamentUsage`, which still gets one plain prompt.
-fn resolve_filament_names(
-    slice: &libprintcalc::formats::slice_summary::SliceSummary,
-    filament: Option<String>,
-    filament_map: Option<String>,
-    interactive_mode: bool,
-) -> Result<HashMap<String, String>, Box<dyn Error>> {
-    let distinct_slots = slice.distinct_filament_slots();
-
-    let mut map: HashMap<String, String> = match filament_map {
-        Some(s) => parse_filament_map(&s)?,
-        None => HashMap::new(),
-    };
-
-    // Single-material print with neither flag given: keep the plain,
-    // not-slot-labeled prompt instead of the per-slot one below.
-    if distinct_slots.len() <= 1 && map.is_empty() {
-        let slot = distinct_slots
-            .into_iter()
-            .next()
-            .unwrap_or_else(|| "1".to_string());
-        let name = interactive::require_choice(
-            filament,
-            "filament",
-            "Filament profile name",
-            interactive_mode,
-            &ops::list_filaments().unwrap_or_default(),
-        )?;
-        return Ok(HashMap::from([(slot, name)]));
-    }
-
-    let missing: Vec<String> = distinct_slots
-        .iter()
-        .filter(|slot| !map.contains_key(*slot))
-        .cloned()
-        .collect();
-
-    if let Some(default_name) = &filament {
-        for slot in &missing {
-            map.insert(slot.clone(), default_name.clone());
-        }
-    } else if !missing.is_empty() {
-        if interactive_mode {
-            let choices = ops::list_filaments().unwrap_or_default();
-            for slot in &missing {
-                let label = format!("Filament profile for slot {slot}");
-                let name = interactive::require_choice(None, "filament-map", &label, true, &choices)?;
-                map.insert(slot.clone(), name);
-            }
-        } else {
-            return Err(format!(
-                "this print uses multiple filament slots ({}) — no filament for slot(s) {}; pass --filament as a default, or --filament-map slot=name,... for each",
-                distinct_slots.join(", "),
-                missing.join(", ")
-            )
-            .into());
-        }
-    }
-
-    Ok(map)
-}
-
-fn parse_filament_map(s: &str) -> Result<HashMap<String, String>, Box<dyn Error>> {
+fn parse_filament_map(
+    s: &str,
+) -> Result<HashMap<String, ProfileChoice<MaterialProfile>>, Box<dyn Error>> {
     s.split(',')
         .map(|pair| {
             let (slot, name) = pair.split_once('=').ok_or_else(|| {
                 format!("invalid --filament-map entry {pair:?}, expected slot=name")
             })?;
-            Ok((slot.trim().to_string(), name.trim().to_string()))
+            Ok((
+                slot.trim().to_string(),
+                ProfileChoice::Named(name.trim().to_string()),
+            ))
         })
         .collect()
 }
@@ -282,9 +448,14 @@ const RESET: &str = "\x1b[0m";
 /// "plates" only shows when more than one plate is actually in play — a
 /// single selected plate (whether because the job only has one, or
 /// because `--plate N` picked one out) is the "omit entirely" case, same
-/// rule `material breakdown`/`hardware breakdown` follow.
+/// rule `material breakdown`/`hardware breakdown` follow. The per-unit
+/// column follows the same rule against `quantity`.
+///
+/// Every money figure is for the whole batch; the trailing summary line
+/// spells out the per-unit split when there's more than one unit.
 fn print_receipt(b: &CostBreakdown) {
     let color = std::io::stdout().is_terminal();
+    let batch = b.quantity > 1;
 
     let cost_labels = [
         "Material",
@@ -348,13 +519,24 @@ fn print_receipt(b: &CostBreakdown) {
     if !b.hardware_breakdown.is_empty() {
         println!("hardware breakdown");
         for line in &b.hardware_breakdown {
-            let detail = format!("x{} @ ${:.2}", line.quantity, line.unit_cost);
-            print_item_line(&line.name, &detail, line.cost, width, BLUE, color);
+            let each = if batch {
+                format!(
+                    "x{} @ ${:.2} × {}",
+                    line.quantity, line.unit_cost, b.quantity
+                )
+            } else {
+                format!("x{} @ ${:.2}", line.quantity, line.unit_cost)
+            };
+            print_item_line(&line.name, &each, line.cost, width, BLUE, color);
         }
         println!();
     }
 
-    println!("summary");
+    if batch {
+        println!("summary  ({} units)", b.quantity);
+    } else {
+        println!("summary");
+    }
     print_cost_line("Material", b.material_cost, width, CYAN, color);
     print_cost_line("Printer wear", b.wear_cost, width, AMBER, color);
     print_cost_line("Electricity", b.electricity_cost, width, AMBER, color);
@@ -362,30 +544,49 @@ fn print_receipt(b: &CostBreakdown) {
     print_cost_line("Hardware", b.hardware_cost, width, BLUE, color);
     println!("  {}", "─".repeat(width + 3));
     print_cost_line("TOTAL", b.total_cost, width, BOLD_GREEN, color);
+    if batch {
+        print_cost_line("  per unit", b.unit_cost, width, BOLD_GREEN, color);
+    }
     println!();
 
-    let markups: Vec<String> = b
+    // Margins, not markups: price = cost / (1 - margin). The header says
+    // so, because the difference between the two is large and silent.
+    let margins: Vec<String> = b
         .suggested_prices
         .iter()
-        .map(|p| format!("{:.0}%", p.markup_percent))
+        .map(|p| format!("{:.0}%", p.margin_percent))
         .collect();
     let prices: Vec<String> = b
         .suggested_prices
         .iter()
         .map(|p| format!("${:.2}", p.price))
         .collect();
+    let header = format!("  sale price @ {} margin:", margins.join(" / "));
     println!(
         "{}",
         paint(
-            &format!(
-                "  sale price @ {}:  {}",
-                markups.join(" / "),
-                prices.join("  ")
-            ),
+            &format!("{header}  {}", prices.join("  ")),
             BOLD_GREEN,
             color
         )
     );
+    if batch {
+        let per_unit: Vec<String> = b
+            .suggested_prices
+            .iter()
+            .map(|p| format!("${:.2}", p.unit_price))
+            .collect();
+        // Padded to the header so the two rows of prices line up.
+        let label = format!("{:<width$}", "  per unit:", width = header.len());
+        println!(
+            "{}",
+            paint(
+                &format!("{label}  {}", per_unit.join("  ")),
+                BOLD_GREEN,
+                color
+            )
+        );
+    }
 }
 
 /// `label` + dotted leader (to `width`) + `trailing`, uncolored — used for

@@ -16,9 +16,11 @@ pub struct ConfigArgs {
     /// Default labor rate per hour.
     #[arg(short = 'r', long = "labor-rate")]
     pub labor_rate: Option<f64>,
-    /// Comma-separated default markup percentages, e.g. `50,60,70`.
-    #[arg(long = "markup")]
-    pub markup: Option<String>,
+    /// Comma-separated default gross *margin* percentages, e.g.
+    /// `50,60,70` — the share of the sale price that isn't cost, so a
+    /// 60% margin prices at cost / 0.40. Not markups.
+    #[arg(long = "margin", alias = "markup")]
+    pub margin: Option<String>,
 }
 
 pub fn run(args: ConfigArgs) -> Result<(), Box<dyn Error>> {
@@ -33,15 +35,22 @@ pub fn run(args: ConfigArgs) -> Result<(), Box<dyn Error>> {
         config.labor_rate_per_hour = v;
         changed = true;
     }
-    if let Some(csv) = args.markup {
-        config.markup_percentages = csv
+    if let Some(csv) = args.margin {
+        let margins = csv
             .split(',')
             .map(|s| {
                 s.trim()
                     .parse::<f64>()
-                    .map_err(|_| format!("invalid --markup entry {s:?}"))
+                    .map_err(|_| format!("invalid --margin entry {s:?}"))
             })
             .collect::<Result<Vec<f64>, _>>()?;
+        if let Some(bad) = margins.iter().find(|m| **m >= 100.0 || **m < 0.0) {
+            return Err(format!(
+                "margin of {bad}% is out of range — a margin is the share of the sale price that isn't cost, so it must be 0-99 (a 60% markup is a 37.5% margin)"
+            )
+            .into());
+        }
+        config.margin_percentages = margins;
         changed = true;
     }
 
@@ -56,5 +65,5 @@ pub fn run(args: ConfigArgs) -> Result<(), Box<dyn Error>> {
 fn print_config(c: &CostDefaults) {
     println!("electricity_cost_per_kwh: {}", c.electricity_cost_per_kwh);
     println!("labor_rate_per_hour: {}", c.labor_rate_per_hour);
-    println!("markup_percentages: {:?}", c.markup_percentages);
+    println!("margin_percentages: {:?}", c.margin_percentages);
 }

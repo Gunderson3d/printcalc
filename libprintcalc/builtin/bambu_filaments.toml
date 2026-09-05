@@ -5,264 +5,264 @@
 name = "bambu-abs"
 kind = "filament"
 price = 24.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-abs-gf"
 kind = "filament"
 price = 29.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-asa"
 kind = "filament"
 price = 31.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-asa-aero"
 kind = "filament"
 price = 49.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-asa-cf"
 kind = "filament"
 price = 36.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-pa6-cf"
 kind = "filament"
 price = 79.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-pa6-gf"
 kind = "filament"
 price = 59.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-pa-cf"
 kind = "filament"
 price = 84.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-paht-cf"
 kind = "filament"
 price = 94.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-pc"
 kind = "filament"
 price = 39.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-pet-cf"
 kind = "filament"
 price = 84.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-petg-basic"
 kind = "filament"
 price = 24.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-petg-cf"
 kind = "filament"
 price = 34.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-petg-hf"
 kind = "filament"
 price = 24.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-petg-translucent"
 kind = "filament"
 price = 24.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-pla-aero"
 kind = "filament"
 price = 44.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-pla-basic"
 kind = "filament"
 price = 24.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-pla-cf"
 kind = "filament"
 price = 34.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-pla-dynamic"
 kind = "filament"
 price = 31.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-pla-galaxy"
 kind = "filament"
 price = 29.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-pla-glow"
 kind = "filament"
 price = 29.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-pla-marble"
 kind = "filament"
 price = 29.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-pla-matte"
 kind = "filament"
 price = 24.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-pla-metal"
 kind = "filament"
 price = 29.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-pla-pure"
 kind = "filament"
 price = 24.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-pla-silk"
 kind = "filament"
 price = 29.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-pla-silk-plus"
 kind = "filament"
 price = 29.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-pla-sparkle"
 kind = "filament"
 price = 29.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-pla-tough"
 kind = "filament"
 price = 28.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-pla-tough-plus"
 kind = "filament"
 price = 24.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-pla-translucent"
 kind = "filament"
 price = 24.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-pla-wood"
 kind = "filament"
 price = 24.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-pps-cf"
 kind = "filament"
 price = 175.0
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-tpu-85a"
 kind = "filament"
 price = 44.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-tpu-90a"
 kind = "filament"
 price = 59.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-tpu-95a"
 kind = "filament"
 price = 41.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-tpu-95a-hf"
 kind = "filament"
 price = 41.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
 
 [[material]]
 name = "bambu-tpu-for-ams"
 kind = "filament"
 price = 38.99
-efficiency_factor = 1.1
+efficiency_factor = 1.5
 vendor = "Bambu Lab"
