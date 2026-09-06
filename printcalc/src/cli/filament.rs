@@ -1,4 +1,9 @@
-//! filament subcommand
+//! `printcalc filament` — add, list and inspect saved filament and resin
+//! profiles.
+//!
+//! One command covers both: `--kind` decides whether `--price` is read
+//! per kilogram (filament, measured in grams) or per litre (resin,
+//! measured in millilitres). As with printers, only a name is required.
 use std::error::Error;
 
 use clap::{Args, Subcommand};
@@ -18,24 +23,43 @@ pub struct FilamentArgs {
 
 #[derive(Subcommand)]
 pub enum FilamentCommand {
+    /// Save a filament or resin profile. Only `--name` is required;
+    /// `--price` and `--efficiency-factor` fall back to their documented
+    /// defaults (see `docs/reference/pricing.md`).
     Add {
+        /// Profile name. Also the filename it's saved under, and what
+        /// `--filament` looks up.
+        ///
+        /// Auto-detection matches this against the name the slicer
+        /// recorded, so naming a profile after the slicer's preset (e.g.
+        /// `bambu-pla-basic`) makes it match exactly.
         #[arg(short, long)]
         name: Option<String>,
         /// "filament" or "resin".
         #[arg(short, long, default_value = "filament")]
         kind: String,
-        /// Price per kg (filament) or per liter (resin).
+        /// Price per kg (filament) or per liter (resin). [default: 20]
         #[arg(long)]
         price: Option<f64>,
+        /// Waste allowance applied before pricing: how much more material
+        /// you're charged for than the slicer predicted, covering purge,
+        /// skirts and failed prints. 1.5 prices 50% extra. [default: 1.5]
         #[arg(long = "efficiency-factor")]
         efficiency_factor: Option<f64>,
+        /// Free-form display color — a name or a hex code. Does not
+        /// affect cost.
         #[arg(long)]
         color: Option<String>,
+        /// Manufacturer. Does not affect cost, but auto-detection rejects
+        /// a match whose stated vendor disagrees with this one.
         #[arg(long)]
         vendor: Option<String>,
     },
+    /// List every saved filament profile by name.
     List,
+    /// Print a saved filament profile's values.
     Show {
+        /// Profile name, as shown by `printcalc filament list`.
         name: String,
     },
 }

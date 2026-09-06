@@ -1,4 +1,10 @@
-//! printcalc config command.
+//! `printcalc config` — view and set the global defaults every job falls
+//! back to when it overrides none of them, saved to
+//! `<config dir>/config.toml`.
+//!
+//! With no flags the command prints the current values. A missing config
+//! file is not an error: a fresh install uses the built-in defaults, so
+//! there is no init step.
 
 use std::error::Error;
 
@@ -10,15 +16,19 @@ use crate::ops;
 
 #[derive(Args)]
 pub struct ConfigArgs {
-    /// Default electricity cost per kWh.
+    /// Default electricity cost per kWh, priced against each printer's
+    /// stated wattage. [default: 0.14]
     #[arg(short = 'e', long = "electricity-cost")]
     pub electricity_cost: Option<f64>,
-    /// Default labor rate per hour.
+    /// Default labor rate per hour, used by any job that doesn't set
+    /// its own with `--labor-rate`. [default: 15]
     #[arg(short = 'r', long = "labor-rate")]
     pub labor_rate: Option<f64>,
     /// Comma-separated default gross *margin* percentages, e.g.
     /// `50,60,70` — the share of the sale price that isn't cost, so a
-    /// 60% margin prices at cost / 0.40. Not markups.
+    /// 60% margin prices at cost / 0.40, i.e. 2.5x cost. Not markups: a
+    /// 60% markup would be 1.6x cost, which is only a 37.5% margin.
+    /// Values of 100 or more are rejected. [default: 50,60,70]
     #[arg(long = "margin", alias = "markup")]
     pub margin: Option<String>,
 }

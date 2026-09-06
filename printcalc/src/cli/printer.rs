@@ -1,4 +1,8 @@
-//! printer subcommand
+//! `printcalc printer` — add, list and inspect saved printer profiles.
+//!
+//! `add` requires only a name: every numeric field falls back to
+//! [`WearProfile::default`], prompting with that default shown when
+//! interactive and taking it silently under `--no-input`.
 
 use std::error::Error;
 
@@ -21,24 +25,44 @@ pub struct PrinterArgs {
 
 #[derive(Subcommand)]
 pub enum PrinterCommand {
+    /// Save a printer profile. Only `--name` is required; every numeric
+    /// field falls back to its documented default (see
+    /// `docs/reference/pricing.md`). Interactively, each prompt shows its
+    /// default and a blank answer accepts it.
     Add {
+        /// Profile name. Also the filename it's saved under, and what
+        /// `--printer` looks up.
         #[arg(short, long)]
         name: Option<String>,
         /// "fdm" or "resin".
         #[arg(short, long, default_value = "fdm")]
         kind: String,
+        /// What the machine itself cost. [default: 800]
         #[arg(long = "purchase-price")]
         purchase_price: Option<f64>,
+        /// Anything else spent getting it running — enclosure, AMS,
+        /// upgrades, tooling. [default: 0]
         #[arg(long = "additional-upfront-cost")]
         additional_upfront_cost: Option<f64>,
+        /// Depreciation horizon: how long before you replace it.
+        /// [default: 5]
         #[arg(long = "estimated-life-years")]
         estimated_life_years: Option<f64>,
+        /// Fraction of wall-clock time the printer is actually printing,
+        /// 0.0-1.0. Lower means each hour carries more depreciation.
+        /// [default: 0.5]
         #[arg(long = "estimated-uptime-percent")]
         estimated_uptime_percent: Option<f64>,
+        /// Yearly spend on consumable parts — nozzles, belts, plates.
+        /// [default: 80]
         #[arg(long = "annual-maintenance-cost")]
         annual_maintenance_cost: Option<f64>,
+        /// Average draw while printing, in watts. Priced at the
+        /// electricity rate from `printcalc config`. [default: 160]
         #[arg(long = "power-consumption-watts")]
         power_consumption_watts: Option<f64>,
+        /// Safety margin applied to the computed hourly rate, over the
+        /// raw depreciation math. [default: 1.3]
         #[arg(long = "cost-buffer-factor")]
         cost_buffer_factor: Option<f64>,
         /// Flat cost per printing hour, replacing the whole computed
@@ -46,8 +70,11 @@ pub enum PrinterCommand {
         #[arg(long = "print-time-rate")]
         print_time_rate: Option<f64>,
     },
+    /// List every saved printer profile by name.
     List,
+    /// Print a saved printer profile's values.
     Show {
+        /// Profile name, as shown by `printcalc printer list`.
         name: String,
     },
 }

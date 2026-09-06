@@ -1,26 +1,8 @@
 # printcalc
 
-The `printcalc` command-line tool: calculates 3D print job costs —
-material, print time, printer wear, electricity, labor, and extra
-hardware — from real sliced-file output instead of manual entry. All
-parsing and cost-calculation logic lives in the `libprintcalc` crate;
-this crate is the CLI built on it. `printcalc-wasm` in this workspace is
-a thin browser frontend over the library (see `../SPEC.md` for the full
-design).
-
-## Install
-
-```sh
-cargo install printcalc        # build from source
-cargo binstall printcalc       # or grab a prebuilt binary
-```
-
-`printcalc <file> [flags]` costs a sliced file (or calcs an existing job
-`.toml`); `printer`/`filament` subcommands manage your profile library.
-Run `printcalc --help` for the full flag list.
-
-Sliced files already say which printer they were sliced for and what was
-in each filament slot, so the common case needs no flags at all:
+Command-line tool for calculating 3D print job costs — material, print
+time, printer wear, electricity, labor and hardware — from real
+sliced-file output instead of manual entry.
 
 ```console
 $ printcalc Cube_0.2mm_PLA_Prusa\ MINI_20m7s.gcode
@@ -28,39 +10,85 @@ detected from Cube_0.2mm_PLA_Prusa MINI_20m7s.gcode
   slicer:   OrcaSlicer 2.4.2
   printer:  Prusa MINI -> prusa-mini-plus (guess)
   slot 1 (Generic PLA @System #26A69A) -> priced from the file at $20.00/kg
-...
+
+material breakdown
+  Generic PLA @System.............. 4.65g @ $20.00/kg = $0.09
+
+summary
+  Material......................... $0.09
+  Printer wear..................... $0.02
+  Electricity...................... $0.01
+  Labor............................ $0.00
+  Hardware......................... $0.00
+  ────────────────────────────────────
+  TOTAL............................ $0.12
+
+  sale price @ 50% / 60% / 70% margin:  $0.23  $0.29  $0.38
 ```
 
-Each guess is matched against your saved profiles first, then the
-built-in presets; a slot that matches nothing but whose file states a
-price is costed from that. `--printer`/`--filament`/`--filament-map`
-override any of it, and `--no-detect` turns the whole thing off. Nothing
-is ever priced at zero by default — an unidentifiable slot is an error
-naming what the file said about it.
+Sliced files already record which printer they were sliced for and what
+was in each filament slot, so the common case needs no flags at all.
 
-`-q/--quantity N` prices a batch: every cost and price shown is for the
-whole batch, with the per-unit figure alongside it.
+## Install
 
-`printer add` and `filament add` only really need a name: every numeric
-field falls back to the default tabulated in [PRICING.md](../PRICING.md)
-(an 800 machine, 5-year life at 50% uptime, 160W, 1.3 buffer; filament at
-20/kg with a 1.5 waste factor). The same defaults apply to fields a
-hand-written profile `.toml` leaves out, so a profile can state only what
-you actually know about it.
+```sh
+cargo install printcalc     # build from source
+cargo binstall printcalc    # or a prebuilt binary
+```
 
-A key in a profile or job `.toml` that nothing recognizes is reported on
-stderr and ignored, rather than failing the load: `warning: unrecognized
-keys in printers/a1.toml: purchase_pric (ignored)`. It's worth saying
-because the field it was meant to set silently took its default instead.
+## Usage
 
-Sale prices are gross **margins**, not markups — a 60% margin is
-`cost / 0.40`, i.e. 2.5x cost. `printcalc config --margin 50,60,70` sets
-the tiers.
+```sh
+printcalc <file>                    # cost a sliced file or a job .toml
+printcalc <file> -o job.toml        # and save the job
+printcalc printer add --name mini   # manage the profile library
+printcalc filament list
+printcalc config --margin 40,55,65  # global defaults
+```
 
-Format support is feature-gated the same way as in `libprintcalc`
-(`bambu-3mf`, `gcode`, `prusa-bgcode`, `prusa-sl1`, with `bambu`/`prusa`
-umbrellas; `default = ["bambu", "prusa"]`) and passed through when
-building from source:
+`printcalc --help` lists every flag; the
+[CLI reference](../docs/reference/cli.md) explains them.
+
+New here? **[Pricing your first
+print](../docs/tutorial/pricing-your-first-print.md)** goes from install
+to a saved quote in about ten minutes.
+
+## Documentation
+
+- [Tutorial](../docs/tutorial/pricing-your-first-print.md)
+- [How-to guides](../docs/how-to/) — multi-filament jobs, batches,
+  correcting a wrong detection, saving quotes, setting margins
+- [Reference](../docs/reference/) — CLI, pricing, job files, profile
+  files, formats
+- [Explanation](../docs/explanation/) — why margins, how matching
+  decides, job tiers, architecture
+
+## Things worth knowing up front
+
+**Prices are gross margins, not markups.** A 60% margin is `cost / 0.40`,
+i.e. 2.5× cost. See [margins are not
+markups](../docs/explanation/margins-not-markups.md).
+
+**Nothing is priced at zero by default.** A filament slot that can't be
+identified is an error naming what the file said about it, not a silent
+zero. See [why matching refuses to
+guess](../docs/explanation/conservative-matching.md).
+
+**Profiles need only a name.** `printer add` and `filament add` fill in
+every numeric field you skip with a
+[documented default](../docs/reference/pricing.md#5-defaults).
+
+## Formats
+
+| Format | Extension | Feature |
+|---|---|---|
+| Bambu Studio 3MF | `.gcode.3mf` | `bambu-3mf` |
+| Plain-text G-code | `.gcode` | `gcode` |
+| PrusaSlicer binary G-code | `.bgcode` | `prusa-bgcode` |
+| PrusaSlicer SLA | `.sl1`, `.sl1s` | `prusa-sl1` |
+
+`bambu` and `prusa` are umbrella features; `default = ["bambu", "prusa"]`
+builds everything. For a smaller binary:
 
 ```sh
 cargo install printcalc --no-default-features --features prusa-sl1
@@ -68,9 +96,9 @@ cargo install printcalc --no-default-features --features prusa-sl1
 
 ## Library
 
-Writing an application instead of using the CLI? Depend on
-[`libprintcalc`](../libprintcalc) — see its README and crate docs
-(`cargo doc --open -p libprintcalc`) for the API.
+Building an application rather than using the CLI? Depend on
+[`libprintcalc`](../libprintcalc) — see [Embed the
+library](../docs/how-to/embed-the-library.md).
 
 ## License
 

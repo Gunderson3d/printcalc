@@ -2,12 +2,16 @@
 //! Core library for calculating 3D print job costs from sliced-file output.
 //!
 //! `libprintcalc` is the single home for all I/O-free logic — slice-file
-//! parsing, cost calculation, and job-tier data structures — plus a thin
-//! read-only [`disk`] helper for loading them from files.
-//! The `printcalc` CLI (its own crate) and `printcalc-wasm` are thin
-//! frontends over it; the CLI additionally owns
-//! everything write- or config-backed (the profile library, job file
-//! saving, config persistence).
+//! parsing, profile matching, cost calculation, and the job-tier data
+//! structures — plus a thin read-only [`disk`] helper for loading them
+//! from files. The `printcalc` CLI (its own crate) and `printcalc-wasm`
+//! are thin frontends over it, so they cannot disagree about what a job
+//! costs; the CLI additionally owns everything write- or config-backed
+//! (the profile library, job file saving, config persistence).
+//!
+//! The arithmetic every one of them shares is written out in
+//! `docs/reference/pricing.md`. Suggested sale prices are gross
+//! **margins**, not markups: a 60% margin is `cost / 0.40`.
 //!
 //! # Entry points
 //!
@@ -19,6 +23,10 @@
 //! - [`parse_job`] parses job TOML into a [`Job`]; [`read_job`] reads it
 //!   from a file. [`parse_printer`]/[`parse_material`] parse profile TOML;
 //!   [`read_printer`]/[`read_material`] load the same from disk.
+//!   [`parse_toml`] does the same for any of them and additionally
+//!   reports every key the file carried that no field claimed, so a
+//!   frontend can warn about a typo instead of letting it silently take
+//!   a default.
 //! - [`new_job`] builds a [`Job`] from a sliced-file path (or an
 //!   already-parsed [`SliceSummary`]) and an embedded printer profile —
 //!   no lookups, can't fail.
@@ -86,7 +94,7 @@
 //!     name: "pla-black".to_string(),
 //!     kind: MaterialKind::Filament,
 //!     price: 18.99,
-//!     efficiency_factor: 1.1,
+//!     efficiency_factor: 1.5,
 //!     color: None,
 //!     vendor: None,
 //! };

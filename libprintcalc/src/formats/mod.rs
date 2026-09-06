@@ -1,4 +1,17 @@
 //! `SliceParser` trait, format detection, and per-slicer parsers.
+//!
+//! [`parse_slice_bytes`] tries each compiled-in parser's cheap
+//! [`SliceParser::detect`] in turn and hands off to the first that claims
+//! the bytes. Detection uses the filename where it can and content
+//! sniffing where it must, so a renamed file still parses.
+//!
+//! Each parser is behind its own Cargo feature. A format that isn't
+//! compiled in is simply absent from the chain, so an unsupported file
+//! and an unreadable one both report [`ParseError::NotThisFormat`] —
+//! the parser that would have told them apart isn't there.
+//!
+//! Every parser produces the same [`slice_summary::SliceSummary`],
+//! so nothing downstream knows which format a job came from.
 
 use std::fmt;
 

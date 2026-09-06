@@ -1,4 +1,19 @@
-//! Bambu Studio `.gcode.3mf` parser.
+//! Bambu Studio `.gcode.3mf` parser (also produced by OrcaSlicer).
+//!
+//! A zip holding, among much else, two files worth reading:
+//!
+//! - `Metadata/slice_info.config` (XML) — per-plate print time
+//!   predictions and per-slot filament usage. This is what costing needs.
+//! - `Metadata/project_settings.config` (JSON) — the filament profile
+//!   names, vendors, prices and densities, as parallel arrays indexed by
+//!   AMS tray. Best-effort: a file without it still costs.
+//!
+//! The tray `id` in `slice_info.config` is 1-based while the
+//! `project_settings.config` arrays are 0-based, so slot N reads array
+//! index N-1.
+//!
+//! This is the only supported format that can hold **several plates** in
+//! one file, which is what [`crate::Job::plate_selection`] exists for.
 
 use std::collections::HashMap;
 use std::io::Cursor;

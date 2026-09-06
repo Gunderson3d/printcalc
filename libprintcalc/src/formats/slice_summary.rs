@@ -1,4 +1,16 @@
-//! `SliceSummary`: the common shape extracted from any supported slicer output.
+//! `SliceSummary`: the common shape extracted from any supported slicer
+//! output.
+//!
+//! Two halves, with very different obligations.
+//!
+//! The **usage** half — plates, print times, and per-slot grams or
+//! millilitres — is what costing consumes, and every parser must produce
+//! it.
+//!
+//! The **metadata** half — [`SliceMeta`] and the profile names, vendors,
+//! prices and colours on each [`FilamentUsage`] — is entirely optional
+//! and feeds [`crate::matching`]. A format that records less still costs
+//! correctly; it just asks the user more questions.
 
 use std::collections::HashMap;
 

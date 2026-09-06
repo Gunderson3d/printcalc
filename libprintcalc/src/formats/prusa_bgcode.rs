@@ -1,4 +1,15 @@
 //! PrusaSlicer binary G-code (`.bgcode`) parser.
+//!
+//! `.bgcode` holds the same `key = value` metadata as plain-text
+//! `.gcode`, block-structured and compressed instead of written out as
+//! comments. Once the metadata blocks are decoded back to text, this
+//! hands off to the same metadata parser as plain-text `.gcode` and
+//! behaves identically to it — so the two formats report exactly the same fields.
+//!
+//! Only the file/printer/print/slicer metadata blocks are decoded. The
+//! `GCode` block (the actual motion stream, and nearly all of the file's
+//! size) and any `Thumbnail` blocks are skipped without being
+//! decompressed.
 
 use binarygcode::{BlockKind, DeserialisedResult, Deserialiser};
 

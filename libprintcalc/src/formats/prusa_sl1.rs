@@ -1,4 +1,26 @@
 //! PrusaSlicer resin `.sl1` / `.sl1s` parser.
+//!
+//! Both extensions are the same thing: a zip holding the sliced layer
+//! images plus two ini files. Only the ini files are read; the images
+//! are never touched.
+//!
+//! - `config.ini` carries what costing needs — `printTime`,
+//!   `usedMaterial`, `layerHeight` — and is required.
+//! - `prusaslicer.ini` carries the full profile PrusaSlicer sliced with:
+//!   resin vendor, colour, density, bottle price. It is best-effort, and
+//!   a file without it still costs.
+//!
+//! Two things differ from the FDM parsers. Resin is measured in
+//! **millilitres**, not grams, so a [`crate::MaterialProfile`] costing it
+//! must be [`crate::MaterialKind::Resin`] and priced per litre.
+//! `material_type` holds the *family* (`"Model"`), matching FDM's
+//! `"PLA"`, while the full preset name goes in `profile_name`.
+//!
+//! Price needs converting: PrusaSlicer stores `bottle_cost` and
+//! `bottle_volume` rather than a unit price. A `bottle_cost` of `0` — the
+//! stock default on most presets — means *unpriced*, not free, and is
+//! deliberately not turned into a price of zero. Most `.sl1` files
+//! therefore need a saved resin profile to cost against.
 
 use std::collections::HashMap;
 

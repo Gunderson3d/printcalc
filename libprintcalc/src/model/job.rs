@@ -93,7 +93,7 @@ pub struct HardwareItem {
     pub cost: f64,
     /// How many were used **per unit** — 4 magnets per print stays 4
     /// however large the batch, and `Job::quantity` scales it.
-    /// `PRICING.md`'s `n[j]`, which defaults to 1.
+    /// Defaults to 1.
     #[serde(default = "one")]
     pub quantity: u32,
 }

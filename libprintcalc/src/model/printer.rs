@@ -1,4 +1,14 @@
-//! `PrinterProfile` and its wear/depreciation model.
+//! `PrinterProfile`: what an hour on a machine costs.
+//!
+//! [`WearProfile`] holds the depreciation inputs — what the machine cost,
+//! how long it should last, how much of that time it actually prints —
+//! which [`super::cost`] turns into an hourly rate. A shop that already
+//! knows its hourly rate can state it directly with
+//! [`WearProfile::print_time_rate_override`] and skip the derivation.
+//!
+//! Electricity price is deliberately not here: it depends on where you
+//! pay your bill, not on which printer ran the job, so it lives in the
+//! job or the global config.
 
 use serde::{Deserialize, Serialize};
 
@@ -36,8 +46,8 @@ pub struct PrinterProfile {
 /// file format is unchanged.
 ///
 /// Every wear field is optional here and falls back to
-/// [`WearProfile::default`], keeping `PRICING.md`'s defaults stated in
-/// exactly one place.
+/// [`WearProfile::default`], keeping the defaults stated in exactly one
+/// place.
 #[derive(Deserialize)]
 struct PrinterWire {
     name: String,
@@ -89,19 +99,19 @@ impl<'de> Deserialize<'de> for PrinterProfile {
     }
 }
 
-/// `PRICING.md`'s default for `C` — purchase price.
+/// Default purchase price when a profile doesn't state one.
 pub const DEFAULT_PURCHASE_PRICE: f64 = 800.0;
-/// `PRICING.md`'s default for `A` — additional upfront cost.
+/// Default additional upfront cost when a profile doesn't state one.
 pub const DEFAULT_ADDITIONAL_UPFRONT_COST: f64 = 0.0;
-/// `PRICING.md`'s default for `M` — annual maintenance.
+/// Default annual maintenance spend when a profile doesn't state one.
 pub const DEFAULT_ANNUAL_MAINTENANCE_COST: f64 = 80.0;
-/// `PRICING.md`'s default for `Y` — life in years.
+/// Default depreciation horizon, in years.
 pub const DEFAULT_LIFE_YEARS: f64 = 5.0;
-/// `PRICING.md`'s default for `U` — uptime fraction.
+/// Default share of the year spent printing, `0.0`-`1.0`.
 pub const DEFAULT_UPTIME_PERCENT: f64 = 0.50;
-/// `PRICING.md`'s default for `P` — power draw while printing, in watts.
+/// Default power draw while printing, in watts.
 pub const DEFAULT_POWER_CONSUMPTION_WATTS: f64 = 160.0;
-/// `PRICING.md`'s default for `B` — cost buffer factor.
+/// Default safety margin over the computed hourly rate.
 pub const DEFAULT_COST_BUFFER_FACTOR: f64 = 1.3;
 
 /// Depreciation and running-cost inputs for [`PrinterProfile`], consumed by
@@ -111,24 +121,20 @@ pub const DEFAULT_COST_BUFFER_FACTOR: f64 = 1.3;
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WearProfile {
-    /// What the printer itself cost. `PRICING.md`'s `C`.
+    /// What the printer itself cost.
     pub purchase_price: f64,
     /// Anything else spent getting it running (upgrades, shipping, ...).
-    /// `PRICING.md`'s `A`.
     pub additional_upfront_cost: f64,
     /// Expected working lifetime, in years, before replacement.
-    /// `PRICING.md`'s `Y`.
     pub estimated_life_years: f64,
     /// Fraction of the year (`0.0`-`1.0`) the printer is actually printing.
-    /// `PRICING.md`'s `U`.
     pub estimated_uptime_percent: f64,
     /// Expected yearly maintenance spend (nozzles, belts, ...).
-    /// `PRICING.md`'s `M`.
     pub annual_maintenance_cost: f64,
-    /// The printer's own power draw while printing. `PRICING.md`'s `P`.
+    /// The printer's own power draw while printing.
     pub power_consumption_watts: f64,
     /// Multiplier applied to the computed wear/electricity rate — a safety
-    /// margin over the raw depreciation math. `PRICING.md`'s `B`.
+    /// margin over the raw depreciation math.
     pub cost_buffer_factor: f64,
     /// A flat cost per printing hour that replaces the whole computed
     /// machine rate — depreciation, electricity and `cost_buffer_factor`
@@ -138,10 +144,11 @@ pub struct WearProfile {
     pub print_time_rate_override: Option<f64>,
 }
 
-/// The defaults tabulated in `PRICING.md`: an 800 machine, no extra
-/// upfront cost, 80/yr maintenance, a 5-year life at 50% uptime, 160W,
-/// and a 1.3 buffer. Each field falls back to its entry here when a
-/// profile omits it.
+/// An 800 machine, no extra upfront cost, 80/yr maintenance, a 5-year
+/// life at 50% uptime, 160W, and a 1.3 buffer. Each field falls back to
+/// its value here when a profile omits it, so a profile can state only
+/// what its owner actually knows. Tabulated in
+/// `docs/reference/pricing.md`.
 impl Default for WearProfile {
     fn default() -> Self {
         WearProfile {
@@ -169,10 +176,10 @@ impl PrinterProfile {
 mod tests {
     use super::*;
 
-    /// Every numeric field carries `PRICING.md`'s tabulated default, so a
-    /// profile that states only what it knows still costs a job.
+    /// Every numeric field carries a default, so a profile that states
+    /// only what it knows still costs a job.
     #[test]
-    fn omitted_fields_take_the_pricing_md_defaults() {
+    fn omitted_fields_take_the_documented_defaults() {
         let profile: PrinterProfile = toml::from_str(
             r#"
 name = "sparse"

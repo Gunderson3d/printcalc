@@ -1,4 +1,10 @@
-//! `MaterialProfile` (filament and resin materials).
+//! `MaterialProfile`: what a material costs and how much of it you're
+//! charged for.
+//!
+//! One type covers both filament and resin. [`MaterialKind`] decides how
+//! `price` is read — per kilogram against grams, or per litre against
+//! millilitres — and costing rejects a profile whose kind doesn't match
+//! the sliced file's process, so no unit conversion is ever needed.
 
 use serde::{Deserialize, Serialize};
 
@@ -15,11 +21,11 @@ pub enum MaterialKind {
     Resin,
 }
 
-/// `PRICING.md`'s default for `K` — spool price, per kg of filament or
-/// per liter of resin.
+/// Default spool price when a profile doesn't state one — per kg of
+/// filament, per liter of resin.
 pub const DEFAULT_PRICE: f64 = 20.0;
-/// `PRICING.md`'s default for `m` — the material markup covering purge,
-/// waste and failures.
+/// Default waste allowance when a profile doesn't state one, covering
+/// purge, skirts and failed prints.
 pub const DEFAULT_EFFICIENCY_FACTOR: f64 = 1.5;
 
 fn default_price() -> f64 {
@@ -40,12 +46,11 @@ pub struct MaterialProfile {
     pub kind: MaterialKind,
     /// Price per unit of material — per kilogram for
     /// [`MaterialKind::Filament`], per liter for [`MaterialKind::Resin`].
-    /// `PRICING.md`'s `K`.
     #[serde(default = "default_price")]
     pub price: f64,
     /// Waste/purge multiplier applied to raw usage before pricing (e.g.
-    /// `1.1` = price for 10% more than the slicer reported was actually
-    /// used). `PRICING.md`'s `m`.
+    /// `1.5` = price for 50% more than the slicer reported was actually
+    /// used), covering purge, skirts and failed prints.
     #[serde(default = "default_efficiency_factor")]
     pub efficiency_factor: f64,
     /// Free-form display color, e.g. `"black"` or a hex code.
@@ -68,10 +73,10 @@ impl MaterialProfile {
 mod tests {
     use super::*;
 
-    /// `PRICING.md` gives `K` and `m` defaults; a profile naming only the
-    /// material still prices.
+    /// Price and waste allowance both default, so a profile naming only
+    /// the material still prices.
     #[test]
-    fn omitted_price_and_factor_take_the_pricing_md_defaults() {
+    fn omitted_price_and_factor_take_the_documented_defaults() {
         let profile: MaterialProfile = toml::from_str(
             r#"
 name = "sparse"

@@ -292,7 +292,7 @@ pub fn detect_profiles(slice: &SliceSummary) -> Detected {
 
 /// Waste allowance for a profile built from a sliced file's own price.
 /// No slicer records one, so this borrows the median of whatever the
-/// user's saved filaments use, falling back to `PRICING.md`'s `m` default
+/// user's saved filaments use, falling back to the documented default
 /// when they have none saved.
 fn default_efficiency_factor(saved: &[MaterialProfile]) -> f64 {
     let mut factors: Vec<f64> = saved

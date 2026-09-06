@@ -1,4 +1,9 @@
 //! Shared prompt helpers.
+//!
+//! Each takes an already-parsed flag value and fills it in when absent:
+//! by asking, when the terminal is interactive, or by failing or falling
+//! back to a default under `--no-input`. Keeping that decision here means
+//! no subcommand has to check the interactivity flag itself.
 
 use std::error::Error;
 use std::io::{self, Write};
@@ -42,10 +47,9 @@ pub fn require_string(
     }
 }
 
-/// An f64 that has a documented fallback (`PRICING.md`'s default column).
-/// Prompts with the default shown and accepts a blank answer when
-/// interactive; under `--no-input` it just takes the default rather than
-/// erroring the way [`require_f64`] does.
+/// An f64 with a documented fallback. Prompts with the default shown and
+/// accepts a blank answer when interactive; under `--no-input` it takes
+/// the default rather than erroring.
 pub fn defaulted_f64(
     value: Option<f64>,
     label: &str,

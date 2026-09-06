@@ -1,6 +1,11 @@
-//! `printcalc` CLI. Arg parsing, interactive prompts, terminal output, and
-//! everything disk-backed (profile library, job file I/O, config
-//! persistence) — the filesystem-free logic lives in `printcalc`.
+//! `printcalc` CLI. Arg parsing, interactive prompts, terminal output,
+//! and everything disk-backed — the profile library, job file I/O,
+//! config persistence.
+//!
+//! No costing logic lives here. Parsing, matching and the arithmetic are
+//! all in `libprintcalc`, which this crate and `printcalc-wasm` are both
+//! thin frontends over, so the terminal and the browser cannot disagree
+//! about what a job costs.
 //!
 //! `printcalc <file> [flags]` is the primary action (cost a sliced file, or
 //! calc an existing job `.toml`) — `printer`/`filament` are subcommands for
@@ -35,6 +40,8 @@ struct Cli {
     /// stem if no -o.
     #[arg(short = 'n', long)]
     name: Option<String>,
+    /// Printer profile to price wear and electricity against. Overrides
+    /// whatever the sliced file says it was sliced for.
     #[arg(short = 'p', long)]
     printer: Option<String>,
     /// Default filament for every slot; overridden per-slot by
@@ -66,8 +73,13 @@ struct Cli {
     /// single-plate formats.
     #[arg(short = 'P', long)]
     plate: Option<String>,
+    /// Hands-on time **per unit** — setup, removal, support picking,
+    /// finishing. Multiplied by --quantity, so charging one setup across
+    /// a batch means dividing those minutes down yourself.
     #[arg(short = 'm', long = "labor-minutes")]
     labor_minutes: Option<f64>,
+    /// Labor rate per hour for this job, overriding the global default
+    /// set by `printcalc config --labor-rate`.
     #[arg(short = 'r', long = "labor-rate")]
     labor_rate: Option<f64>,
     /// How many units to price. Every cost and price shown is for the
@@ -92,7 +104,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Add, list and inspect saved printer profiles.
     Printer(PrinterArgs),
+    /// Add, list and inspect saved filament and resin profiles.
     Filament(FilamentArgs),
     /// View/set global defaults (electricity cost, labor rate, margin
     /// percentages) — saved to `~/.config/printcalc/config.toml`.

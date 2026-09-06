@@ -1,4 +1,14 @@
-//! main logic for parsing and calculating a print job
+//! The default command: cost a sliced file or a saved job `.toml`.
+//!
+//! This is where auto-detection meets explicit flags. A sliced file is
+//! parsed, [`libprintcalc::auto_job`] guesses the printer and each
+//! filament slot from what the file records, and anything the user named
+//! explicitly overrides that guess. Detection then reports only what a
+//! flag *didn't* already settle, so the output never suggests a choice
+//! was made for the user when it wasn't.
+//!
+//! Detection notes and warnings go to stderr, keeping stdout clean for
+//! `--format json`.
 
 use std::collections::HashMap;
 use std::error::Error;

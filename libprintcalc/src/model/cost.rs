@@ -1,10 +1,10 @@
 //! `CostBreakdown`, `SuggestedPrice`, and the cost calculation itself.
 //!
-//! The arithmetic here follows `PRICING.md` at the repository root, which
-//! is the language-agnostic statement of the model; the names differ
-//! (`efficiency_factor` for its `markup_multiplier`, `hardware` for its
-//! `extra_costs`, and machine cost kept split into its wear and
-//! electricity halves), the numbers don't.
+//! The arithmetic is written out in full in
+//! `docs/reference/pricing.md`, including a worked example of the
+//! machine rate and the defaults every field falls back to. Machine cost
+//! is computed as one hourly rate and reported as two fields —
+//! `wear_cost` and `electricity_cost` — purely for display.
 
 use std::collections::HashMap;
 use std::fmt;
@@ -703,12 +703,13 @@ mod tests {
         assert!((combined - 0.10).abs() < 5e-3);
     }
 
-    /// The machine-rate worked example from `PRICING.md` §1, checked
-    /// through the public API rather than by restating its arithmetic:
+    /// The machine-rate worked example from `docs/reference/pricing.md`,
+    /// checked through the public API rather than by restating its
+    /// arithmetic:
     /// `C=699, A=0, M=80, Y=5, U=0.50, P=105, B=1.3, E=0.14` gives
     /// `R = 0.084347`, which reaches `print_time_rate` rounded to 4dp.
     #[test]
-    fn pricing_md_machine_rate_example() {
+    fn documented_machine_rate_example() {
         let printer = PrinterProfile {
             name: "prusa-p1s".into(),
             kind: PrinterKind::Fdm,

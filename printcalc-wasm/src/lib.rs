@@ -140,7 +140,7 @@ pub fn new_job(
 /// arrays of profiles to search ahead of the built-in presets — pass the
 /// page's own saved profiles here, or `null` for built-ins only.
 /// `default_efficiency_factor` is the waste allowance given to a profile
-/// built from the file's own stated price (no slicer records one); `1.1`
+/// built from the file's own stated price (no slicer records one); `1.5`
 /// matches the built-in presets.
 ///
 /// Returns `{ "job": Job, "printer": Match|null, "slots": [...] }` — the

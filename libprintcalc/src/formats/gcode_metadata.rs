@@ -1,4 +1,19 @@
-//! (b)gcode comment metadata parsing and `SliceSummary` building.
+//! The `key = value` metadata block shared by plain-text `.gcode` and
+//! binary `.bgcode`, and the [`SliceSummary`] built from it.
+//!
+//! Both formats carry the same PrusaSlicer-lineage settings dump — as
+//! `;`-prefixed comments in one, as compressed blocks in the other — so
+//! both hand their decoded lines here and get identical results.
+//!
+//! Per-slot values arrive as positional lists, and the two separators
+//! differ: text lists (`filament_settings_id`, `filament_vendor`) are
+//! `;`-separated, numeric lists (`filament_cost`, `filament used [g]`)
+//! are `,`-separated. Slot N reads index N of each. A single
+//! `filament_vendor` with several slots applies to all of them.
+//!
+//! Nothing here is required. This is a comment convention rather than a
+//! specification, so a slicer that omits a key simply yields less
+//! metadata — it never fails the parse.
 
 use std::collections::HashMap;
 
