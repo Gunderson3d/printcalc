@@ -99,17 +99,15 @@ pub fn run(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
         // persisted if -o saves a copy below, calc-only otherwise (e.g.
         // pricing just one plate out of a Bundled job saved with "all",
         // without needing the original sliced file).
-        let plate_override = parse_plate_override(inv.plate.as_deref())?;
+        let plate = parse_plate(inv.plate.as_deref())?;
         if let Some(output) = &inv.output {
             let mut job = ops::load_job(&inv.file)?;
-            if let Some(plate_selection) = plate_override {
-                job.plate_selection = plate_selection;
-            }
+            plate.apply(&mut job);
             ops::save_job(&job, output)?;
             println!("wrote {}", output.display());
             return Ok(());
         }
-        let breakdown = ops::calc_job(&inv.file, plate_override)?;
+        let breakdown = ops::calc_job(&inv.file, plate)?;
         print_result(&breakdown, inv.format);
         return Ok(());
     }
@@ -122,7 +120,7 @@ pub fn run(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
 /// the bare `printcalc <slice>` invocation form.
 fn new_job_flow(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
     let slice = ops::parse_slice(&inv.file)?;
-    let plate_selection = parse_plate(inv.plate.as_deref())?;
+    let plate_selection = parse_plate(inv.plate.as_deref())?.selection();
 
     // Parsed up front so detection can tell which slots a flag already
     // covers and stay quiet about those.
@@ -168,7 +166,7 @@ fn new_job_flow(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
             .to_string()
     });
 
-    let outcome = ops::new_job_from_slice(
+    let outcome = ops::new_job(
         NewJobParams {
             name,
             slice_path: inv.file.clone(),
@@ -400,23 +398,15 @@ fn resolve_filaments(
     Ok(map)
 }
 
-fn parse_plate(plate: Option<&str>) -> Result<Option<u32>, Box<dyn Error>> {
+/// `--plate`: absent, `"all"`, or a plate number.
+fn parse_plate(plate: Option<&str>) -> Result<ops::PlateOverride, Box<dyn Error>> {
     match plate {
-        None | Some("all") => Ok(None),
+        None => Ok(ops::PlateOverride::Keep),
+        Some("all") => Ok(ops::PlateOverride::All),
         Some(s) => s
             .parse::<u32>()
-            .map(Some)
+            .map(ops::PlateOverride::Only)
             .map_err(|_| format!("invalid --plate value: {s:?}").into()),
-    }
-}
-
-/// Same values as [`parse_plate`], but distinguishes "not given" (outer
-/// `None`, don't touch the job's own `plate_selection`) from "given as
-/// `all`" (`Some(None)`, explicitly override to every plate).
-fn parse_plate_override(plate: Option<&str>) -> Result<Option<Option<u32>>, Box<dyn Error>> {
-    match plate {
-        None => Ok(None),
-        Some(_) => parse_plate(plate).map(Some),
     }
 }
 
@@ -452,6 +442,75 @@ const ROSE: &str = "\x1b[31m";
 const BLUE: &str = "\x1b[34m";
 const BOLD_GREEN: &str = "\x1b[1;32m";
 const RESET: &str = "\x1b[0m";
+
+/// The per-plate table, shown only for a multi-plate file — a single
+/// plate would just restate the summary.
+fn print_plate_section(b: &CostBreakdown, width: usize) {
+    if b.plate_breakdown.len() <= 1 {
+        return;
+    }
+    println!("plates");
+    for p in &b.plate_breakdown {
+        let label = format!("Plate {}", p.plate_index);
+        let detail = format!(
+            "{} · {}",
+            format_duration(p.print_time_seconds),
+            format_amount(p.grams, p.ml)
+        );
+        print_dotted(&label, &detail, width);
+    }
+    let combined_seconds: f64 = b.plate_breakdown.iter().map(|p| p.print_time_seconds).sum();
+    let combined_grams: f64 = b.plate_breakdown.iter().map(|p| p.grams).sum();
+    let combined_ml: f64 = b.plate_breakdown.iter().map(|p| p.ml).sum();
+    println!("  {}", "─".repeat(width + 3));
+    let detail = format!(
+        "{} · {}",
+        format_duration(combined_seconds),
+        format_amount(combined_grams, combined_ml)
+    );
+    print_dotted("Combined", &detail, width);
+    println!();
+}
+
+/// One line per contributing filament profile. Slots sharing a profile
+/// are already collapsed into one line by the calculation.
+fn print_material_section(b: &CostBreakdown, width: usize, color: bool) {
+    if b.material_breakdown.is_empty() {
+        return;
+    }
+    println!("material breakdown");
+    for line in &b.material_breakdown {
+        let price_unit = if line.unit == "g" { "kg" } else { "L" };
+        let detail = format!(
+            "{:.2}{} @ ${:.2}/{}",
+            line.amount, line.unit, line.unit_price, price_unit
+        );
+        print_item_line(&line.filament_name, &detail, line.cost, width, CYAN, color);
+    }
+    println!();
+}
+
+/// One line per hardware entry, never aggregated — each is already its
+/// own line item. For a batch the per-unit count and the multiplier are
+/// both shown, since `quantity` scaling is easy to forget.
+fn print_hardware_section(b: &CostBreakdown, width: usize, color: bool) {
+    if b.hardware_breakdown.is_empty() {
+        return;
+    }
+    println!("hardware breakdown");
+    for line in &b.hardware_breakdown {
+        let each = if b.quantity > 1 {
+            format!(
+                "x{} @ ${:.2} × {}",
+                line.quantity, line.unit_cost, b.quantity
+            )
+        } else {
+            format!("x{} @ ${:.2}", line.quantity, line.unit_cost)
+        };
+        print_item_line(&line.name, &each, line.cost, width, BLUE, color);
+    }
+    println!();
+}
 
 /// Receipt-style, dotted-leader table format, split into sections.
 ///
@@ -489,58 +548,9 @@ fn print_receipt(b: &CostBreakdown) {
         + 14;
 
     println!();
-    if b.plate_breakdown.len() > 1 {
-        println!("plates");
-        for p in &b.plate_breakdown {
-            let label = format!("Plate {}", p.plate_index);
-            let detail = format!(
-                "{} · {}",
-                format_duration(p.print_time_seconds),
-                format_amount(p.grams, p.ml)
-            );
-            print_dotted(&label, &detail, width);
-        }
-        let combined_seconds: f64 = b.plate_breakdown.iter().map(|p| p.print_time_seconds).sum();
-        let combined_grams: f64 = b.plate_breakdown.iter().map(|p| p.grams).sum();
-        let combined_ml: f64 = b.plate_breakdown.iter().map(|p| p.ml).sum();
-        println!("  {}", "─".repeat(width + 3));
-        let detail = format!(
-            "{} · {}",
-            format_duration(combined_seconds),
-            format_amount(combined_grams, combined_ml)
-        );
-        print_dotted("Combined", &detail, width);
-        println!();
-    }
-
-    if !b.material_breakdown.is_empty() {
-        println!("material breakdown");
-        for line in &b.material_breakdown {
-            let price_unit = if line.unit == "g" { "kg" } else { "L" };
-            let detail = format!(
-                "{:.2}{} @ ${:.2}/{}",
-                line.amount, line.unit, line.unit_price, price_unit
-            );
-            print_item_line(&line.filament_name, &detail, line.cost, width, CYAN, color);
-        }
-        println!();
-    }
-
-    if !b.hardware_breakdown.is_empty() {
-        println!("hardware breakdown");
-        for line in &b.hardware_breakdown {
-            let each = if batch {
-                format!(
-                    "x{} @ ${:.2} × {}",
-                    line.quantity, line.unit_cost, b.quantity
-                )
-            } else {
-                format!("x{} @ ${:.2}", line.quantity, line.unit_cost)
-            };
-            print_item_line(&line.name, &each, line.cost, width, BLUE, color);
-        }
-        println!();
-    }
+    print_plate_section(b, width);
+    print_material_section(b, width, color);
+    print_hardware_section(b, width, color);
 
     if batch {
         println!("summary  ({} units)", b.quantity);

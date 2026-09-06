@@ -693,18 +693,18 @@ mod tests {
             .join("../Testfiles/Cube_0.2mm_PLA_Prusa MINI_20m7s.gcode");
         let slice = read_slice_file(&path).unwrap();
 
-        let auto = auto_job("cube", path.clone(), slice, [], [], 1.1);
+        let auto = auto_job("cube", path, slice, [], [], 1.5);
 
         assert_eq!(auto.slots.len(), 1);
         let slot = &auto.slots[0];
         assert!(slot.matched.is_none(), "no preset is a Generic PLA");
         let from_file = slot.from_file.as_ref().expect("the file states $20/kg");
         assert_eq!(from_file.price, 20.0);
-        assert_eq!(from_file.efficiency_factor, 1.1);
+        assert_eq!(from_file.efficiency_factor, 1.5);
 
-        // 3.10g * 1.1 * $20/kg
+        // 3.10g * 1.5 * $20/kg
         let breakdown = calculate(&auto.job, &CostDefaults::default()).unwrap();
-        assert!((breakdown.material_cost - 0.0682).abs() < 1e-4);
+        assert!((breakdown.material_cost - 0.093).abs() < 1e-4);
     }
 
     /// A caller's own profiles are searched ahead of the built-ins, so a
@@ -899,7 +899,7 @@ efficiency_factor = 1.1
             Vec::new(),
         );
 
-        assert_eq!(job.source, JobSource::Path(slice_path.clone()));
+        assert_eq!(job.source, JobSource::Path(slice_path));
         assert_eq!(
             job.printer.embedded().map(|p| p.name.as_str()),
             Some("bambu-a1")

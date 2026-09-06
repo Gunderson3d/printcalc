@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use super::filament::{MaterialKind, MaterialProfile};
 use super::job::Job;
-use super::printer::{PrinterKind, PrinterProfile};
+use super::printer::{PrinterKind, PrinterProfile, WearProfile};
 use crate::formats::slice_summary::{PlateSummary, SliceSummary, SourceFormat};
 
 /// Decimal places every cost figure is rounded to when the breakdown is
@@ -333,6 +333,102 @@ fn round_to(value: f64, dp: i32) -> f64 {
     (value * scale).round() / scale
 }
 
+/// Prices every used slot across `plates` against its own profile,
+/// returning the batch total and the per-profile breakdown lines.
+///
+/// Slots sharing a profile collapse into one line, and the lines come
+/// back sorted by profile name so the output is stable. Each profile's
+/// `kind` fixes both the usage unit and the basis of its price (per kg
+/// against grams, per liter against millilitres); `calculate_cost`
+/// rejects a kind that disagrees with the sliced file before calling
+/// here, so no unit conversion is ever needed.
+///
+/// Every used slot must already be covered by `material_profiles` or
+/// `default_material` — `calculate_cost` reports the unmapped ones as a
+/// [`CalcError::MissingMaterial`] first.
+fn price_materials(
+    plates: &[&PlateSummary],
+    material_profiles: &HashMap<String, MaterialProfile>,
+    default_material: Option<&MaterialProfile>,
+    efficiency_factor_override: Option<f64>,
+    quantity: f64,
+) -> (f64, Vec<MaterialLine>) {
+    let mut total = 0.0;
+    let mut lines_by_material: HashMap<String, MaterialLine> = HashMap::new();
+
+    for plate in plates {
+        for usage in &plate.filament_usage {
+            // grams or ml, whichever the usage entry actually carries; a
+            // slot with zero of both is present but unused (Bambu AMS tray
+            // / Prusa extruder not loaded) and is skipped.
+            let native_amount = match (
+                usage.grams.filter(|&g| g != 0.0),
+                usage.ml.filter(|&m| m != 0.0),
+            ) {
+                (Some(g), _) => g,
+                (None, Some(ml)) => ml,
+                (None, None) => continue,
+            };
+            let profile = material_profiles
+                .get(&usage.slot_id)
+                .or(default_material)
+                .expect("every used slot was checked before pricing began");
+            let unit = match profile.kind {
+                MaterialKind::Filament => "g",
+                MaterialKind::Resin => "ml",
+            };
+            let factor = efficiency_factor_override.unwrap_or(profile.efficiency_factor);
+            let used_amount = native_amount * factor * quantity;
+            let cost = used_amount * (profile.price / 1000.0);
+            total += cost;
+
+            let line = lines_by_material
+                .entry(profile.name.clone())
+                .or_insert_with(|| MaterialLine {
+                    filament_name: profile.name.clone(),
+                    amount: 0.0,
+                    unit,
+                    unit_price: profile.price,
+                    cost: 0.0,
+                });
+            line.amount += used_amount;
+            line.cost += cost;
+        }
+    }
+
+    let mut breakdown: Vec<MaterialLine> = lines_by_material
+        .into_values()
+        .map(|line| MaterialLine {
+            amount: round_to(line.amount, COST_DP),
+            cost: round_to(line.cost, COST_DP),
+            ..line
+        })
+        .collect();
+    breakdown.sort_by(|a, b| a.filament_name.cmp(&b.filament_name));
+    (total, breakdown)
+}
+
+/// Depreciation per printing hour: the machine's whole lifetime cost
+/// spread over the hours it's expected to spend printing.
+///
+/// A zero-year life or zero uptime yields `0.0` rather than a division
+/// error — that's a profile saying "don't charge me for depreciation",
+/// which is a legitimate thing to say.
+///
+/// The buffer factor is *not* applied here; `calculate_cost` applies it
+/// to this and the electricity rate together.
+fn capital_cost_per_hour(wear: &WearProfile) -> f64 {
+    let total_lifetime_hours =
+        wear.estimated_life_years * HOURS_PER_YEAR * wear.estimated_uptime_percent;
+    if total_lifetime_hours == 0.0 {
+        return 0.0;
+    }
+    let lifetime_cost = wear.purchase_price
+        + wear.additional_upfront_cost
+        + wear.annual_maintenance_cost * wear.estimated_life_years;
+    lifetime_cost / total_lifetime_hours
+}
+
 /// Cost breakdown for `job` against the already-parsed `slice`, using
 /// already-resolved profiles (a [`super::job::ProfileRef::Linked`] must be
 /// resolved against the profile library — or, for WASM, supplied directly
@@ -426,76 +522,16 @@ pub fn calculate_cost(
         return Err(CalcError::MissingMaterial(unmapped));
     }
 
-    let mut material_cost = 0.0;
-    let mut lines_by_material: HashMap<String, MaterialLine> = HashMap::new();
-    for plate in &selected_plates {
-        for usage in &plate.filament_usage {
-            // grams or ml, whichever the usage entry actually carries; a
-            // slot with zero of both is present but unused (Bambu AMS tray
-            // / Prusa extruder not loaded) and is skipped.
-            let native_amount = match (
-                usage.grams.filter(|&g| g != 0.0),
-                usage.ml.filter(|&m| m != 0.0),
-            ) {
-                (Some(g), _) => g,
-                (None, Some(ml)) => ml,
-                (None, None) => continue,
-            };
-            let profile = material_profiles
-                .get(&usage.slot_id)
-                .or(default_material)
-                .expect("every used slot was checked above");
-            // The profile's kind fixes the usage's unit and the price's
-            // basis (per kg for filament, per liter for resin) — the
-            // up-front kind checks above guarantee they match the sliced
-            // file's format, so no unit conversion is ever needed.
-            let unit = match profile.kind {
-                MaterialKind::Filament => "g",
-                MaterialKind::Resin => "ml",
-            };
-            let effective_factor = job
-                .material_efficiency_factor_override
-                .unwrap_or(profile.efficiency_factor);
-            let used_amount = native_amount * effective_factor * quantity;
-            let cost = used_amount * (profile.price / 1000.0);
-            material_cost += cost;
-
-            let line = lines_by_material
-                .entry(profile.name.clone())
-                .or_insert(MaterialLine {
-                    filament_name: profile.name.clone(),
-                    amount: 0.0,
-                    unit,
-                    unit_price: profile.price,
-                    cost: 0.0,
-                });
-            line.amount += used_amount;
-            line.cost += cost;
-        }
-    }
-    let mut material_breakdown: Vec<MaterialLine> = lines_by_material
-        .into_values()
-        .map(|line| MaterialLine {
-            amount: round_to(line.amount, COST_DP),
-            cost: round_to(line.cost, COST_DP),
-            ..line
-        })
-        .collect();
-    material_breakdown.sort_by(|a, b| a.filament_name.cmp(&b.filament_name));
+    let (material_cost, material_breakdown) = price_materials(
+        &selected_plates,
+        material_profiles,
+        default_material,
+        job.material_efficiency_factor_override,
+        quantity,
+    );
 
     let wear = &printer.wear;
-    let total_lifetime_hours =
-        wear.estimated_life_years * HOURS_PER_YEAR * wear.estimated_uptime_percent;
-    // A 0-year life or 0% uptime is a profile that says "don't charge for
-    // depreciation", not a division error.
-    let capital_cost_per_hour = if total_lifetime_hours == 0.0 {
-        0.0
-    } else {
-        let lifetime_cost = wear.purchase_price
-            + wear.additional_upfront_cost
-            + wear.annual_maintenance_cost * wear.estimated_life_years;
-        lifetime_cost / total_lifetime_hours
-    };
+    let capital_cost_per_hour = capital_cost_per_hour(wear);
 
     let electricity_rate = job
         .electricity_cost_per_kwh_override

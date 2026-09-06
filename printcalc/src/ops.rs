@@ -199,7 +199,7 @@ impl<T> From<String> for ProfileChoice<T> {
     }
 }
 
-/// Inputs to [`new_job`]/[`new_job_from_slice`].
+/// Inputs to [`new_job`].
 pub struct NewJobParams {
     /// A free-form label for the job.
     pub name: String,
@@ -229,7 +229,7 @@ pub struct NewJobParams {
     pub tier: JobTier,
 }
 
-/// Result of [`new_job`]/[`new_job_from_slice`].
+/// Result of [`new_job`].
 pub struct NewJobOutcome {
     /// The built job.
     pub job: Job,
@@ -311,32 +311,22 @@ fn default_efficiency_factor(saved: &[MaterialProfile]) -> f64 {
 /// caller (the CLI's interactive job-creation flow) can validate the file
 /// before doing anything else with it — e.g. prompting for printer/
 /// filament/labor — instead of discovering it's unparseable only after
-/// asking the user several questions. [`new_job`] calls this internally
-/// too; pass an already-parsed summary to [`new_job_from_slice`] to avoid
-/// parsing the same file twice.
+/// asking the user several questions. Its result is then handed to
+/// [`new_job`], so the file is only ever parsed once.
 pub fn parse_slice(path: &Path) -> Result<SliceSummary, OpsError> {
     let bytes = fs::read(path)?;
     let filename = path.file_name().and_then(|f| f.to_str()).unwrap_or("");
     Ok(formats::parse_slice_bytes(&bytes, filename)?)
 }
 
-/// Parses `params.slice_path` and builds a [`Job`] at the requested
-/// [`JobTier`]. See [`new_job_from_slice`] for the split-out, already-
-/// parsed-file version.
-pub fn new_job(params: NewJobParams) -> Result<NewJobOutcome, OpsError> {
-    let summary = parse_slice(&params.slice_path)?;
-    new_job_from_slice(params, summary)
-}
-
-/// Same as [`new_job`], but for a sliced file already read via
-/// [`parse_slice`]. `Full`/`Bundled` load the named printer/filament
-/// profiles (library or built-in, see [`show_printer`]/[`show_filament`])
-/// to embed them (erroring if the name is neither saved nor built-in) —
-/// `Default` just links by name, no lookup needed here.
-pub fn new_job_from_slice(
-    params: NewJobParams,
-    summary: SliceSummary,
-) -> Result<NewJobOutcome, OpsError> {
+/// Builds a [`Job`] at the requested [`JobTier`] from a sliced file
+/// already read via [`parse_slice`].
+///
+/// `Full`/`Bundled` load the named printer/filament profiles (library or
+/// built-in, see [`show_printer`]/[`show_filament`]) to embed them,
+/// erroring if a name is neither saved nor built-in. `Default` just links
+/// by name, so no lookup happens here.
+pub fn new_job(params: NewJobParams, summary: SliceSummary) -> Result<NewJobOutcome, OpsError> {
     let plate_selection_ignored = params.plate_selection.is_some() && summary.plates.len() <= 1;
     let plate_selection = if plate_selection_ignored {
         None
@@ -401,24 +391,57 @@ pub fn load_job(path: &Path) -> Result<Job, OpsError> {
     Ok(job)
 }
 
+/// What a `--plate` flag asks for, including the case where it wasn't
+/// given at all.
+///
+/// The distinction between [`PlateOverride::Keep`] and
+/// [`PlateOverride::All`] is the whole reason this isn't just an
+/// `Option<u32>`: a job saved with `plate = "all"` and one with no
+/// `--plate` on the command line agree on the outcome, but only the
+/// latter should leave the job's own stored selection alone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlateOverride {
+    /// No `--plate` given — keep whatever the job file says.
+    Keep,
+    /// `--plate all` — cost every plate, whatever the job file says.
+    All,
+    /// `--plate N` — cost just plate `N`.
+    Only(u32),
+}
+
+impl PlateOverride {
+    /// Applies this override to `job`, leaving [`PlateOverride::Keep`]
+    /// alone. The job in memory only — nothing is written to disk.
+    pub fn apply(self, job: &mut Job) {
+        match self {
+            PlateOverride::Keep => {}
+            PlateOverride::All => job.plate_selection = None,
+            PlateOverride::Only(index) => job.plate_selection = Some(index),
+        }
+    }
+
+    /// The [`Job::plate_selection`] to give a job being built from
+    /// scratch, where there is no stored selection to keep.
+    pub fn selection(self) -> Option<u32> {
+        match self {
+            PlateOverride::Keep | PlateOverride::All => None,
+            PlateOverride::Only(index) => Some(index),
+        }
+    }
+}
+
 /// Loads the job at `job_path`, resolves its printer/filament refs (against
 /// the local library, for `Linked` — embedded profiles need no lookup) and
 /// its slice data (re-parsed from `source.path`, or read straight off
 /// `source.summary` for a Bundled job), then runs the cost calc.
 ///
-/// `plate_override`, if `Some`, replaces the job's own `plate_selection`
-/// for this calc only (the file on disk is untouched) — `Some(None)` means
-/// "every plate", `Some(Some(n))` means plate `n`. Lets a job saved with
-/// `plate = "all"` (e.g. a Bundled job with the original sliced file long
-/// gone) still be priced one plate at a time on demand.
-pub fn calc_job(
-    job_path: &Path,
-    plate_override: Option<Option<u32>>,
-) -> Result<CostBreakdown, OpsError> {
+/// `plate` replaces the job's own `plate_selection` for this calc only —
+/// the file on disk is untouched. That lets a job saved with
+/// `plate = "all"` (a Bundled job whose original sliced file is long gone,
+/// say) still be priced one plate at a time on demand.
+pub fn calc_job(job_path: &Path, plate: PlateOverride) -> Result<CostBreakdown, OpsError> {
     let mut job = load_job(job_path)?;
-    if let Some(plate_selection) = plate_override {
-        job.plate_selection = plate_selection;
-    }
+    plate.apply(&mut job);
     let slice = resolve_slice_summary(&job, job_path)?;
     calc_job_data(&job, &slice)
 }
@@ -584,7 +607,7 @@ mod tests {
         // Tolerances here are 1e-4: reported costs are rounded to four
         // decimal places (see `cost::COST_DP`), so they can't match an
         // exact product to more than that.
-        let breakdown = calc_job(&path, None).unwrap();
+        let breakdown = calc_job(&path, PlateOverride::Keep).unwrap();
         assert!((breakdown.material_cost - 0.2654538075).abs() < 1e-4);
         assert_eq!(breakdown.material_breakdown.len(), 1);
         assert_eq!(
@@ -596,33 +619,36 @@ mod tests {
         assert_eq!(breakdown.hardware_breakdown.len(), 2);
 
         // --plate 1 override: just the first plate's material.
-        let plate1 = calc_job(&path, Some(Some(1))).unwrap();
+        let plate1 = calc_job(&path, PlateOverride::Only(1)).unwrap();
         assert!((plate1.material_cost - 0.136426395).abs() < 1e-4);
 
         // --plate 3 doesn't exist (only plates 1 and 2 are in this fixture).
         assert!(matches!(
-            calc_job(&path, Some(Some(3))).unwrap_err(),
+            calc_job(&path, PlateOverride::Only(3)).unwrap_err(),
             OpsError::Calc(CalcError::PlateNotFound(3))
         ));
     }
 
     #[test]
     fn new_job_parses_slice_and_builds_default_tier_job() {
-        let outcome = new_job(NewJobParams {
-            name: "test-print".into(),
-            slice_path: sl1_fixture_path(),
-            printer: "sl1-printer".to_string().into(),
-            filaments: HashMap::from([(
-                SINGLE_MATERIAL_SLOT.to_string(),
-                "resin-grey".to_string().into(),
-            )]),
-            plate_selection: None,
-            labor_minutes: 10.0,
-            labor_rate_per_hour: None,
-            default_filament: None,
-            quantity: 1,
-            tier: JobTier::Default,
-        })
+        let outcome = new_job(
+            NewJobParams {
+                name: "test-print".into(),
+                slice_path: sl1_fixture_path(),
+                printer: "sl1-printer".to_string().into(),
+                filaments: HashMap::from([(
+                    SINGLE_MATERIAL_SLOT.to_string(),
+                    "resin-grey".to_string().into(),
+                )]),
+                plate_selection: None,
+                labor_minutes: 10.0,
+                labor_rate_per_hour: None,
+                default_filament: None,
+                quantity: 1,
+                tier: JobTier::Default,
+            },
+            parse_slice(&sl1_fixture_path()).unwrap(),
+        )
         .unwrap();
 
         assert!(!outcome.plate_selection_ignored);
@@ -646,21 +672,24 @@ mod tests {
     fn new_job_warns_when_plate_selection_is_moot() {
         // Shape-Box.sl1s has exactly one plate — requesting plate 2 has
         // nothing to select, so it should be reported as ignored.
-        let outcome = new_job(NewJobParams {
-            name: "test-print".into(),
-            slice_path: sl1_fixture_path(),
-            printer: "sl1-printer".to_string().into(),
-            filaments: HashMap::from([(
-                SINGLE_MATERIAL_SLOT.to_string(),
-                "resin-grey".to_string().into(),
-            )]),
-            plate_selection: Some(2),
-            labor_minutes: 0.0,
-            labor_rate_per_hour: None,
-            default_filament: None,
-            quantity: 1,
-            tier: JobTier::Default,
-        })
+        let outcome = new_job(
+            NewJobParams {
+                name: "test-print".into(),
+                slice_path: sl1_fixture_path(),
+                printer: "sl1-printer".to_string().into(),
+                filaments: HashMap::from([(
+                    SINGLE_MATERIAL_SLOT.to_string(),
+                    "resin-grey".to_string().into(),
+                )]),
+                plate_selection: Some(2),
+                labor_minutes: 0.0,
+                labor_rate_per_hour: None,
+                default_filament: None,
+                quantity: 1,
+                tier: JobTier::Default,
+            },
+            parse_slice(&sl1_fixture_path()).unwrap(),
+        )
         .unwrap();
 
         assert!(outcome.plate_selection_ignored);
@@ -743,7 +772,7 @@ mod tests {
 
         let path = temp_job_path("bundled");
         save_job(&job, &path).unwrap();
-        let breakdown = calc_job(&path, None).unwrap();
+        let breakdown = calc_job(&path, PlateOverride::Keep).unwrap();
         let _ = fs::remove_file(&path);
 
         // 10ml * 1.0 factor * ($40/1000) = $0.40
@@ -817,26 +846,29 @@ mod tests {
         .unwrap();
         assert_eq!(show_printer("bambu-a1").unwrap().wear.purchase_price, 999.0);
 
-        let outcome = new_job(NewJobParams {
-            name: "test-print".into(),
-            slice_path: sl1_fixture_path(),
-            printer: "sl1-printer".to_string().into(),
-            filaments: HashMap::from([(
-                SINGLE_MATERIAL_SLOT.to_string(),
-                "resin-grey".to_string().into(),
-            )]),
-            plate_selection: None,
-            labor_minutes: 6.0,
-            labor_rate_per_hour: None,
-            default_filament: None,
-            quantity: 1,
-            tier: JobTier::Default,
-        })
+        let outcome = new_job(
+            NewJobParams {
+                name: "test-print".into(),
+                slice_path: sl1_fixture_path(),
+                printer: "sl1-printer".to_string().into(),
+                filaments: HashMap::from([(
+                    SINGLE_MATERIAL_SLOT.to_string(),
+                    "resin-grey".to_string().into(),
+                )]),
+                plate_selection: None,
+                labor_minutes: 6.0,
+                labor_rate_per_hour: None,
+                default_filament: None,
+                quantity: 1,
+                tier: JobTier::Default,
+            },
+            parse_slice(&sl1_fixture_path()).unwrap(),
+        )
         .unwrap();
 
         let path = temp_job_path("default-tier");
         save_job(&outcome.job, &path).unwrap();
-        let breakdown = calc_job(&path, None).unwrap();
+        let breakdown = calc_job(&path, PlateOverride::Keep).unwrap();
 
         // Re-tiering: Default -> Bundled embeds both the profiles and the
         // parsed slice summary; the retiered job needs neither the
@@ -854,7 +886,7 @@ mod tests {
         unsafe {
             std::env::remove_var("PRINTCALC_CONFIG_DIR");
         }
-        let bundled_breakdown = calc_job(&bundled_path, None).unwrap(); // ...still calcs fine
+        let bundled_breakdown = calc_job(&bundled_path, PlateOverride::Keep).unwrap(); // ...still calcs fine
         assert_eq!(bundled_breakdown.material_cost, breakdown.material_cost);
 
         assert!(matches!(

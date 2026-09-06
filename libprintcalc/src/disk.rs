@@ -140,7 +140,7 @@ efficiency_factor = 1.1
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../Testfiles/Shape-Box.sl1");
         let from_path = crate::new_job(
             "widget",
-            path.clone(),
+            path,
             crate::create_printer(
                 "sl1-printer",
                 PrinterKind::Resin,
