@@ -7,7 +7,7 @@ exposes everything that works without a filesystem.
 
 ## Use the hosted tool
 
-<https://kaifungamedev.github.io/printcalc/> is `printcalc-wasm/demo/`
+<https://gunderson3d.github.io/printcalc/> is `printcalc-wasm/demo/`
 published by the Pages workflow on every push to `main` that touches the
 library or the wasm crate. Drop a sliced file, or open a bundled job
 `.toml` saved by the CLI. It offers the same built-in presets as the

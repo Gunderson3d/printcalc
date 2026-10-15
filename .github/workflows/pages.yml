@@ -5,13 +5,8 @@ name: Pages
 # One-time setup: Settings -> Pages -> Source: "GitHub Actions".
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "libprintcalc/**"
-      - "printcalc-wasm/**"
-      - "Cargo.lock"
-      - ".github/workflows/pages.yml"
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
