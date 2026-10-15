@@ -98,7 +98,7 @@ pub fn run(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
                 .ok_or("--retier needs -o/--output to save the re-tiered job to")?;
             let retiered = ops::retier_job(&inv.file, job_type.into())?;
             ops::save_job(&retiered, &output)?;
-            println!("wrote {}", output.display());
+            eprintln!("wrote {}", output.display());
             return Ok(());
         }
         // --plate here overrides the job's own stored plate_selection —
@@ -107,15 +107,14 @@ pub fn run(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
         // without needing the original sliced file).
         let plate = parse_plate(inv.plate.as_deref())?;
         let hardware = parse_hardware(&inv.hardware)?;
+        let mut job = ops::load_job(&inv.file)?;
+        plate.apply(&mut job);
+        job.hardware.extend(hardware);
         if let Some(output) = &inv.output {
-            let mut job = ops::load_job(&inv.file)?;
-            plate.apply(&mut job);
-            job.hardware.extend(hardware);
             ops::save_job(&job, output)?;
-            println!("wrote {}", output.display());
-            return Ok(());
+            eprintln!("wrote {}", output.display());
         }
-        let breakdown = ops::calc_job(&inv.file, plate, hardware)?;
+        let breakdown = ops::calc_job_at(&job, &inv.file)?;
         print_result(&breakdown, inv.format, inv.color);
         return Ok(());
     }
@@ -123,9 +122,9 @@ pub fn run(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
 }
 
 /// `file` isn't a `.toml` — parse it as a sliced file and build a job. With
-/// `-o`, save it (no calc shown, matching the old `job new`). Without,
-/// nothing is written at all — just resolve refs and show the cost, for
-/// the bare `printcalc <slice>` invocation form.
+/// `-o`, save it first. Either way the cost is then resolved and shown,
+/// so saving a quote and seeing it are one step. The "wrote" note goes to
+/// stderr so `--format json` stays clean on stdout.
 fn new_job_flow(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
     let slice = ops::parse_slice(&inv.file)?;
     let plate_selection = parse_plate(inv.plate.as_deref())?.selection();
@@ -195,16 +194,12 @@ fn new_job_flow(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
         eprintln!("warning: --plate is ignored for single-plate sliced files");
     }
 
-    match inv.output {
-        Some(path) => {
-            ops::save_job(&outcome.job, &path)?;
-            println!("wrote {}", path.display());
-        }
-        None => {
-            let breakdown = ops::calc_job_data(&outcome.job, &outcome.slice)?;
-            print_result(&breakdown, inv.format, inv.color);
-        }
+    if let Some(path) = &inv.output {
+        ops::save_job(&outcome.job, path)?;
+        eprintln!("wrote {}", path.display());
     }
+    let breakdown = ops::calc_job_data(&outcome.job, &outcome.slice)?;
+    print_result(&breakdown, inv.format, inv.color);
     Ok(())
 }
 

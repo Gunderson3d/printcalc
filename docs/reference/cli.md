@@ -50,7 +50,7 @@ fallback. See [job files](job-file.md#materials).
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `-o, --output <PATH>` | — | Save the job here. Without it nothing is written; the cost is computed and shown. |
+| `-o, --output <PATH>` | — | Save the job here. The cost is shown either way; without it nothing is written. The `wrote` note goes to stderr. |
 | `-t, --type <TIER>` | `default` | How much to embed when saving: `default`, `full`, `bundled`. See [job tiers](../explanation/job-tiers.md). |
 | `--retier <TIER>` | — | Re-tier an existing job `.toml` instead of costing it. Requires `-o`. |
 | `-F, --format <FMT>` | `table` | `table` or `json`. |

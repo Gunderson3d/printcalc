@@ -445,6 +445,7 @@ impl PlateOverride {
 /// `hardware` is appended to whatever the job file already lists, so
 /// `--hardware` on the command line adds to a saved job rather than
 /// replacing its entries. The job on disk is untouched.
+#[cfg(test)]
 pub fn calc_job(
     job_path: &Path,
     plate: PlateOverride,
@@ -453,8 +454,15 @@ pub fn calc_job(
     let mut job = load_job(job_path)?;
     plate.apply(&mut job);
     job.hardware.extend(hardware);
-    let slice = resolve_slice_summary(&job, job_path)?;
-    calc_job_data(&job, &slice)
+    calc_job_at(&job, job_path)
+}
+
+/// [`calc_job`] for a job already loaded (and possibly modified in
+/// memory) from `job_path` — the path is still needed to resolve a
+/// relative `source.path` against the job file's directory.
+pub fn calc_job_at(job: &Job, job_path: &Path) -> Result<CostBreakdown, OpsError> {
+    let slice = resolve_slice_summary(job, job_path)?;
+    calc_job_data(job, &slice)
 }
 
 /// Same as [`calc_job`], but for a `job`/`slice` already in hand — used to

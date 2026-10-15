@@ -57,8 +57,8 @@ struct Cli {
     /// only show up when the sliced file is re-parsed later.
     #[arg(long = "default-filament")]
     default_filament: Option<String>,
-    /// Save the job here. Without this, nothing is written — the cost is
-    /// just computed and shown.
+    /// Save the job here as well as showing its cost. Without this,
+    /// nothing is written.
     #[arg(short, long)]
     output: Option<PathBuf>,
     #[arg(short = 't', long = "type", value_enum, default_value = "default")]

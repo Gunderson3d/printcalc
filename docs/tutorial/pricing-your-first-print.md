@@ -187,9 +187,10 @@ Add `-o` to write the job to a file:
 $ printcalc Cube_0.2mm_PLA_Prusa\ MINI_20m7s.gcode \
     -p mini -f pla-grey -m 12 -q 5 -o cube-quote.toml
 wrote cube-quote.toml
+...
 ```
 
-Open `cube-quote.toml` and you'll see plain, editable TOML. Change
+The same summary prints as before, after the `wrote` line. Open `cube-quote.toml` and you'll see plain, editable TOML. Change
 `quantity` to `10`, then re-cost it by passing the job file back:
 
 ```sh
