@@ -32,7 +32,8 @@ pub struct ConfigArgs {
     #[arg(long = "margin", alias = "markup")]
     pub margin: Option<String>,
     /// Symbol printed before every money amount, e.g. `€` or `"kr "`.
-    /// Display only — it doesn't convert anything. [default: $]
+    /// Display only — it doesn't convert anything; built-in presets stay
+    /// US dollar prices under any symbol. [default: $]
     #[arg(short = 'c', long = "currency", value_name = "SYMBOL")]
     pub currency: Option<String>,
 }

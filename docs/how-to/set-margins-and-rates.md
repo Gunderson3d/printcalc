@@ -21,7 +21,11 @@ currency_symbol: "€"
 
 `--currency` only changes the symbol in front of each amount. Nothing is
 converted; your profiles and the output are in whatever currency you
-entered them in.
+entered them in. Two inputs you didn't enter: the built-in presets are
+US dollar list prices, and a price taken from the sliced file is in
+whatever currency your slicer uses. Edit the preset (`printcalc filament
+edit bambu-pla-basic --price 22.50`) or save your own profile to put a
+local price in front of either.
 
 These are saved to `~/.config/printcalc/config.toml` and apply to every
 job that doesn't override them.

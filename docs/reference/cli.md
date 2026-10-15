@@ -84,7 +84,9 @@ detected from Cube_0.2mm_PLA_Prusa MINI_20m7s.gcode
 Names are matched against your saved profiles first, then the built-in
 presets. A match is labelled `exact` only when the names agree
 completely; anything else is a `guess`. A slot that matches nothing but
-whose file states a price is costed from that price.
+whose file states a price is costed from that price. That price is in
+whatever currency the slicer profile was set up in — `printcalc` prints
+it under the configured symbol without converting.
 
 Detection stays quiet about anything a flag already covers, and prints to
 stderr. A slot that ends up with no profile and no stated price is an
@@ -173,7 +175,10 @@ values.
 | `-c, --currency <SYMBOL>` | `$` |
 
 `--currency` is the symbol printed before every amount — `€`, `£`,
-`"kr "`. Display only; nothing is converted.
+`"kr "`. Display only; nothing is converted. In particular the
+[built-in presets](profile-files.md#built-in-presets) carry US dollar
+prices and a slicer's own stated filament price is in whatever currency
+the slicer was configured in; both print under your symbol unchanged.
 
 `--margin` takes comma-separated gross **margin** percentages — the share
 of the sale price that isn't cost, so 60 prices at `cost / 0.40`. Values

@@ -136,6 +136,13 @@ library, so `--printer prusa-mini-plus` works with an empty library.
 Your own profiles always win: a saved profile shadows a built-in of the
 same name, and auto-detection searches your library before the presets.
 
+Preset prices — printer purchase prices and filament prices per kg or
+per liter — are **US dollar list prices** at the time they were added.
+`currency_symbol` doesn't convert them: with `€` configured, a preset's
+`$24.99/kg` prints as `€24.99/kg`. Set your own price with
+`printcalc filament edit <name> --price ...` (which saves a shadowing
+copy) if your currency or your supplier differs.
+
 ## Unrecognized keys
 
 A key nothing recognizes is reported and ignored, not rejected:

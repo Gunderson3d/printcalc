@@ -82,11 +82,13 @@ last:
 1. **Your saved profiles.** Searched first, so your own library always
    beats a shipped preset.
 2. **The built-in presets.** Common Bambu and Prusa hardware and
-   filaments.
+   filaments, at US dollar list prices.
 3. **The file's own stated price.** Most slicers record what the
    operator configured the spool to cost. That is a real number about
    this specific job, so it is used — reported as
    `priced from the file at $20.00/kg` so you can see where it came from.
+   It is in whatever currency the slicer was configured in; no
+   conversion is applied.
 4. **Nothing.** The slot is left unpriced.
 
 Step 4 is where the principle bites. An unpriced slot is not costed at

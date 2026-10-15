@@ -10,7 +10,9 @@
 //! starter data and are always compiled in. `bambu_printers.toml`/
 //! `bambu_filaments.toml` and `prusa_printers.toml`/`prusa_filaments.toml`
 //! hold real vendor catalogs pulled from each slicer's own system
-//! profiles, gated behind the `bambu`/`prusa` Cargo features (same
+//! profiles, priced in US dollars (list price when added — no currency
+//! conversion exists anywhere in the crate), gated behind the
+//! `bambu`/`prusa` Cargo features (same
 //! features [`crate::formats`] gates its parsers behind) — a build with
 //! only one vendor feature enabled only bakes in that vendor's presets.
 
