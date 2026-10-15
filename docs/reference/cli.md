@@ -54,6 +54,7 @@ fallback. See [job files](job-file.md#materials).
 | `-t, --type <TIER>` | `default` | How much to embed when saving: `default`, `full`, `bundled`. See [job tiers](../explanation/job-tiers.md). |
 | `--retier <TIER>` | — | Re-tier an existing job `.toml` instead of costing it. Requires `-o`. |
 | `-F, --format <FMT>` | `table` | `table` or `json`. |
+| `--no-color` | — | Plain table output, no ANSI colors. Color is also off when stdout isn't a terminal or `NO_COLOR` is set. |
 
 `--format json` prints the full `CostBreakdown` on stdout. Warnings and
 detection notes go to stderr, so the JSON is always clean to pipe.

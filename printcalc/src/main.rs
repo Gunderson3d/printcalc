@@ -108,6 +108,10 @@ struct Cli {
     /// (`--name` here, `--name` on `printer`/`filament add`).
     #[arg(long = "no-input", global = true)]
     no_input: bool,
+    /// Plain output, no ANSI colors. Color is already off when stdout
+    /// isn't a terminal or the NO_COLOR environment variable is set.
+    #[arg(long = "no-color", global = true)]
+    no_color: bool,
 
     #[command(subcommand)]
     command: Option<Command>,
@@ -150,6 +154,7 @@ fn main() {
                 hardware: cli.hardware,
                 no_detect: cli.no_detect,
                 format: cli.format,
+                color: !cli.no_color,
                 interactive,
             }),
             None => {

@@ -81,6 +81,9 @@ pub struct JobInvocation {
     /// (or fail) as if it said nothing.
     pub no_detect: bool,
     pub format: OutputFormat,
+    /// `false` for `--no-color`. Even when `true`, color only shows on a
+    /// terminal with `NO_COLOR` unset.
+    pub color: bool,
     pub interactive: bool,
     /// Re-tier an existing job (`full` or `bundled` only) instead of
     /// calc'ing it — only meaningful when `file` is a `.toml`. Needs `-o`.
@@ -113,7 +116,7 @@ pub fn run(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
             return Ok(());
         }
         let breakdown = ops::calc_job(&inv.file, plate, hardware)?;
-        print_result(&breakdown, inv.format);
+        print_result(&breakdown, inv.format, inv.color);
         return Ok(());
     }
     new_job_flow(inv)
@@ -199,7 +202,7 @@ fn new_job_flow(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
         }
         None => {
             let breakdown = ops::calc_job_data(&outcome.job, &outcome.slice)?;
-            print_result(&breakdown, inv.format);
+            print_result(&breakdown, inv.format, inv.color);
         }
     }
     Ok(())
@@ -473,14 +476,20 @@ fn parse_hardware_entry(entry: &str) -> Result<HardwareItem, Box<dyn Error>> {
     })
 }
 
-fn print_result(breakdown: &CostBreakdown, format: OutputFormat) {
+fn print_result(breakdown: &CostBreakdown, format: OutputFormat, color: bool) {
     match format {
-        OutputFormat::Table => print_receipt(breakdown),
+        OutputFormat::Table => print_receipt(breakdown, color && color_allowed()),
         OutputFormat::Json => println!(
             "{}",
             serde_json::to_string_pretty(breakdown).expect("CostBreakdown always serializes")
         ),
     }
+}
+
+/// Color is for eyes, not pipes: off when stdout isn't a terminal, and
+/// off when `NO_COLOR` is set to anything (https://no-color.org).
+fn color_allowed() -> bool {
+    std::io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none_or(|v| v.is_empty())
 }
 
 const CYAN: &str = "\x1b[36m";
@@ -569,8 +578,7 @@ fn print_hardware_section(b: &CostBreakdown, width: usize, color: bool) {
 ///
 /// Every money figure is for the whole batch; the trailing summary line
 /// spells out the per-unit split when there's more than one unit.
-fn print_receipt(b: &CostBreakdown) {
-    let color = std::io::stdout().is_terminal();
+fn print_receipt(b: &CostBreakdown, color: bool) {
     let batch = b.quantity > 1;
 
     let cost_labels = [
