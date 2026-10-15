@@ -351,23 +351,15 @@ pub fn new_job(params: NewJobParams, summary: SliceSummary) -> Result<NewJobOutc
         JobTier::Default | JobTier::Full => JobSource::Path(params.slice_path),
     };
 
-    let job = Job {
-        name: params.name,
-        source,
-        plate_selection,
-        printer,
-        material,
-        default_material,
-        quantity: params.quantity,
-        material_efficiency_factor_override: None,
-        electricity_cost_per_kwh_override: None,
-        labor: LaborCost {
-            rate_per_hour: params.labor_rate_per_hour,
-            minutes: params.labor_minutes,
-        },
-        hardware: params.hardware,
-        margin_percentages_override: None,
-    };
+    let mut labor = LaborCost::new(params.labor_minutes);
+    labor.rate_per_hour = params.labor_rate_per_hour;
+    let job = Job::new(params.name, source, printer)
+        .with_plate_selection(plate_selection)
+        .with_materials(material)
+        .with_default_material(default_material)
+        .with_quantity(params.quantity)
+        .with_labor(labor)
+        .with_hardware(params.hardware);
     Ok(NewJobOutcome {
         job,
         slice: summary,
@@ -457,7 +449,7 @@ pub fn calc_job(
     calc_job_at(&job, job_path)
 }
 
-/// [`calc_job`] for a job already loaded (and possibly modified in
+/// Costs a job already loaded (and possibly modified in
 /// memory) from `job_path` — the path is still needed to resolve a
 /// relative `source.path` against the job file's directory.
 pub fn calc_job_at(job: &Job, job_path: &Path) -> Result<CostBreakdown, OpsError> {
@@ -465,7 +457,7 @@ pub fn calc_job_at(job: &Job, job_path: &Path) -> Result<CostBreakdown, OpsError
     calc_job_data(job, &slice)
 }
 
-/// Same as [`calc_job`], but for a `job`/`slice` already in hand — used to
+/// Same as [`calc_job_at`], but for a `job`/`slice` already in hand — used to
 /// preview a job's cost without writing it to disk first (the bare
 /// `printcalc <slice>` form, no `-o`). Loads the saved config for the
 /// fallback defaults.
@@ -520,18 +512,13 @@ pub fn retier_job(job_path: &Path, tier: JobTier) -> Result<Job, OpsError> {
             )
         })
         .collect();
-    let source = if tier == JobTier::Bundled {
-        JobSource::Embedded(resolve_slice_summary(&job, job_path)?)
-    } else {
-        job.source
-    };
-
-    Ok(Job {
-        source,
-        printer,
-        material,
-        ..job
-    })
+    let mut job = job;
+    if tier == JobTier::Bundled {
+        job.source = JobSource::Embedded(resolve_slice_summary(&job, job_path)?);
+    }
+    job.printer = printer;
+    job.material = material;
+    Ok(job)
 }
 
 fn resolve_slice_summary(job: &Job, job_path: &Path) -> Result<SliceSummary, OpsError> {
@@ -717,6 +704,18 @@ mod tests {
         assert_eq!(outcome.job.plate_selection, None);
     }
 
+    /// The resin printer every test here prices against: a 400 machine
+    /// over 5 years at 30% uptime, 20/yr maintenance, 60W, 1.2 buffer.
+    fn sl1_wear() -> WearProfile {
+        WearProfile::new()
+            .with_purchase_price(400.0)
+            .with_estimated_life_years(5.0)
+            .with_estimated_uptime_percent(0.3)
+            .with_annual_maintenance_cost(20.0)
+            .with_power_consumption_watts(60.0)
+            .with_cost_buffer_factor(1.2)
+    }
+
     fn temp_job_path(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("printcalc-ops-test-{name}.toml"))
     }
@@ -726,70 +725,33 @@ mod tests {
     /// without touching the profile library at all.
     #[test]
     fn calc_job_resolves_bundled_job_from_disk() {
-        let job = Job {
-            name: "bundled".into(),
-            source: JobSource::Embedded(SliceSummary {
-                source_format: SourceFormat::PrusaSl1,
-                meta: Default::default(),
-                plates: vec![PlateSummary {
-                    plate_index: 1,
-                    print_time_seconds: 3600.0,
-                    filament_usage: vec![FilamentUsage {
-                        slot_id: SINGLE_MATERIAL_SLOT.into(),
-                        material_type: Some("Resin".into()),
-                        ml: Some(10.0),
-                        ..Default::default()
-                    }],
-                    printer_model: None,
-                    layer_height: None,
-                    extra: HashMap::new(),
-                }],
-            }),
-            plate_selection: None,
-            printer: ProfileRef::Embedded {
-                profile: Box::new(PrinterProfile {
-                    name: "sl1-printer".into(),
-                    kind: PrinterKind::Resin,
-                    wear: WearProfile {
-                        purchase_price: 400.0,
-                        additional_upfront_cost: 0.0,
-                        estimated_life_years: 5.0,
-                        estimated_uptime_percent: 0.3,
-                        annual_maintenance_cost: 20.0,
-                        power_consumption_watts: 60.0,
-                        cost_buffer_factor: 1.2,
-                        print_time_rate_override: None,
-                    },
-                }),
+        let slice = SliceSummary::new(
+            SourceFormat::PrusaSl1,
+            vec![PlateSummary::new(
+                1,
+                3600.0,
+                vec![FilamentUsage::ml(SINGLE_MATERIAL_SLOT, 10.0).with_material_type("Resin")],
+            )],
+        );
+        let printer = PrinterProfile::new("sl1-printer", PrinterKind::Resin, sl1_wear());
+        let resin = MaterialProfile::new("resin-grey", MaterialKind::Resin)
+            .with_price(40.0)
+            .with_efficiency_factor(1.0);
+        let mut job = Job::new(
+            "bundled",
+            JobSource::Embedded(slice),
+            ProfileRef::Embedded {
+                profile: Box::new(printer),
             },
-            material: HashMap::from([(
-                SINGLE_MATERIAL_SLOT.to_string(),
-                ProfileRef::Embedded {
-                    profile: Box::new(MaterialProfile {
-                        name: "resin-grey".into(),
-                        kind: MaterialKind::Resin,
-                        price: 40.0,
-                        efficiency_factor: 1.0,
-                        color: None,
-                        vendor: None,
-                    }),
-                },
-            )]),
-            default_material: None,
-            quantity: 1,
-            material_efficiency_factor_override: None,
-            electricity_cost_per_kwh_override: None,
-            labor: LaborCost {
-                rate_per_hour: Some(15.0),
-                minutes: 20.0,
+        )
+        .with_labor(LaborCost::new(20.0).with_rate_per_hour(15.0))
+        .with_hardware(vec![HardwareItem::new("resin vat film", 2.0)]);
+        job.add_material(
+            SINGLE_MATERIAL_SLOT,
+            ProfileRef::Embedded {
+                profile: Box::new(resin),
             },
-            hardware: vec![HardwareItem {
-                name: "resin vat film".into(),
-                cost: 2.0,
-                quantity: 1,
-            }],
-            margin_percentages_override: None,
-        };
+        );
 
         let path = temp_job_path("bundled");
         save_job(&job, &path).unwrap();
@@ -820,29 +782,17 @@ mod tests {
         assert_eq!(show_printer("bambu-a1").unwrap().kind, PrinterKind::Fdm);
         assert!(list_printers().unwrap().contains(&"bambu-a1".to_string()));
 
-        add_printer(&PrinterProfile {
-            name: "sl1-printer".into(),
-            kind: PrinterKind::Resin,
-            wear: WearProfile {
-                purchase_price: 400.0,
-                additional_upfront_cost: 0.0,
-                estimated_life_years: 5.0,
-                estimated_uptime_percent: 0.3,
-                annual_maintenance_cost: 20.0,
-                power_consumption_watts: 60.0,
-                cost_buffer_factor: 1.2,
-                print_time_rate_override: None,
-            },
-        })
+        add_printer(&PrinterProfile::new(
+            "sl1-printer",
+            PrinterKind::Resin,
+            sl1_wear(),
+        ))
         .unwrap();
-        add_filament(&MaterialProfile {
-            name: "resin-grey".into(),
-            kind: MaterialKind::Resin,
-            price: 40.0,
-            efficiency_factor: 1.0,
-            color: None,
-            vendor: None,
-        })
+        add_filament(
+            &MaterialProfile::new("resin-grey", MaterialKind::Resin)
+                .with_price(40.0)
+                .with_efficiency_factor(1.0),
+        )
         .unwrap();
         let printers = list_printers().unwrap();
         assert!(printers.contains(&"sl1-printer".to_string()));
@@ -856,14 +806,14 @@ mod tests {
         );
 
         // A saved profile shadows a built-in preset under the same name.
-        add_printer(&PrinterProfile {
-            name: "bambu-a1".into(),
-            kind: PrinterKind::Fdm,
-            wear: WearProfile {
-                purchase_price: 999.0,
-                ..builtin::printer("bambu-a1").unwrap().wear
-            },
-        })
+        add_printer(&PrinterProfile::new(
+            "bambu-a1",
+            PrinterKind::Fdm,
+            builtin::printer("bambu-a1")
+                .unwrap()
+                .wear
+                .with_purchase_price(999.0),
+        ))
         .unwrap();
         assert_eq!(show_printer("bambu-a1").unwrap().wear.purchase_price, 999.0);
 

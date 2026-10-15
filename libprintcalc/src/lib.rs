@@ -58,64 +58,31 @@
 //! };
 //!
 //! // Normally the output of `libprintcalc::parse_slice_bytes(bytes, filename)`.
-//! let slice = SliceSummary {
-//!     source_format: SourceFormat::Bambu3mf,
-//!     meta: Default::default(),
-//!     plates: vec![PlateSummary {
-//!         plate_index: 1,
-//!         print_time_seconds: 1037.0,
-//!         filament_usage: vec![FilamentUsage {
-//!             slot_id: SINGLE_MATERIAL_SLOT.to_string(),
-//!             material_type: Some("PLA".to_string()),
-//!             grams: Some(6.66),
-//!             ..Default::default()
-//!         }],
-//!         printer_model: None,
-//!         layer_height: None,
-//!         extra: HashMap::new(),
-//!     }],
-//! };
+//! let slice = SliceSummary::new(
+//!     SourceFormat::Bambu3mf,
+//!     vec![PlateSummary::new(
+//!         1,
+//!         1037.0,
+//!         vec![FilamentUsage::grams(SINGLE_MATERIAL_SLOT, 6.66).with_material_type("PLA")],
+//!     )],
+//! );
 //!
-//! let printer = PrinterProfile {
-//!     name: "bambu-a1".to_string(),
-//!     kind: PrinterKind::Fdm,
-//!     wear: WearProfile {
-//!         purchase_price: 800.0,
-//!         additional_upfront_cost: 0.0,
-//!         estimated_life_years: 5.0,
-//!         estimated_uptime_percent: 0.5,
-//!         annual_maintenance_cost: 80.0,
-//!         power_consumption_watts: 160.0,
-//!         cost_buffer_factor: 1.3,
-//!         print_time_rate_override: None,
-//!     },
-//! };
-//! let filament = MaterialProfile {
-//!     name: "pla-black".to_string(),
-//!     kind: MaterialKind::Filament,
-//!     price: 18.99,
-//!     efficiency_factor: 1.5,
-//!     color: None,
-//!     vendor: None,
-//! };
+//! let printer = PrinterProfile::new(
+//!     "bambu-a1",
+//!     PrinterKind::Fdm,
+//!     WearProfile::new()
+//!         .with_purchase_price(800.0)
+//!         .with_power_consumption_watts(160.0),
+//! );
+//! let filament = MaterialProfile::new("pla-black", MaterialKind::Filament).with_price(18.99);
 //!
-//! let job = Job {
-//!     name: "widget".to_string(),
-//!     source: JobSource::Embedded(slice.clone()),
-//!     plate_selection: None,
-//!     printer: ProfileRef::Linked { name: "bambu-a1".to_string() },
-//!     material: HashMap::from([(
-//!         SINGLE_MATERIAL_SLOT.to_string(),
-//!         ProfileRef::Linked { name: "pla-black".to_string() },
-//!     )]),
-//!     default_material: None,
-//!     quantity: 1,
-//!     material_efficiency_factor_override: None,
-//!     electricity_cost_per_kwh_override: None,
-//!     labor: LaborCost { rate_per_hour: Some(15.0), minutes: 10.0 },
-//!     hardware: vec![],
-//!     margin_percentages_override: None,
-//! };
+//! let mut job = Job::new(
+//!     "widget",
+//!     JobSource::Embedded(slice.clone()),
+//!     ProfileRef::Linked { name: "bambu-a1".to_string() },
+//! )
+//! .with_labor(LaborCost::new(10.0).with_rate_per_hour(15.0));
+//! job.add_material(SINGLE_MATERIAL_SLOT, ProfileRef::Linked { name: "pla-black".to_string() });
 //!
 //! // In a real app, the caller resolves `job.printer`/`job.material`
 //! // (which may be `Linked` refs) first; here they're already resolved,
@@ -287,11 +254,7 @@ pub fn create_printer(
     kind: PrinterKind,
     wear: WearProfile,
 ) -> PrinterProfile {
-    PrinterProfile {
-        name: name.into(),
-        kind,
-        wear,
-    }
+    PrinterProfile::new(name, kind, wear)
 }
 
 /// Builds a material profile from its parts — the same shape
@@ -306,14 +269,12 @@ pub fn create_material(
     color: Option<String>,
     vendor: Option<String>,
 ) -> MaterialProfile {
-    MaterialProfile {
-        name: name.into(),
-        kind,
-        price,
-        efficiency_factor,
-        color,
-        vendor,
-    }
+    let mut profile = MaterialProfile::new(name, kind)
+        .with_price(price)
+        .with_efficiency_factor(efficiency_factor);
+    profile.color = color;
+    profile.vendor = vendor;
+    profile
 }
 
 /// Builds a [`Job`] with the printer embedded by value (no library or
@@ -332,31 +293,25 @@ pub fn new_job(
     labor: Option<LaborCost>,
     hardware: Vec<HardwareItem>,
 ) -> Job {
-    Job {
-        name: name.into(),
-        source: source.into(),
-        plate_selection: None,
-        printer: ProfileRef::Embedded {
+    Job::new(
+        name,
+        source,
+        ProfileRef::Embedded {
             profile: Box::new(printer),
         },
-        material: materials,
-        default_material: None,
-        quantity: 1,
-        material_efficiency_factor_override: None,
-        electricity_cost_per_kwh_override: None,
-        labor: labor.unwrap_or(LaborCost {
-            rate_per_hour: None,
-            minutes: 0.0,
-        }),
-        hardware,
-        margin_percentages_override: None,
-    }
+    )
+    .with_materials(materials)
+    .with_labor(labor.unwrap_or(LaborCost::new(0.0)))
+    .with_hardware(hardware)
 }
 
 /// What [`auto_job`] worked out about a sliced file, alongside the job it
 /// built. Everything here is a *guess* from the file's own metadata — the
 /// caller should show it and let the user override before costing.
+///
+/// `#[non_exhaustive]`: read-only output of the library.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct AutoJob {
     /// The built job. Its printer and every matched slot are embedded by
     /// value, so it costs without any library lookup.
@@ -371,7 +326,10 @@ pub struct AutoJob {
 }
 
 /// How one filament slot got priced by [`auto_job`].
+///
+/// `#[non_exhaustive]`: read-only output of the library.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct AutoSlot {
     /// The slot's usage and whatever the slicer said about it.
     pub usage: SlotUsage,

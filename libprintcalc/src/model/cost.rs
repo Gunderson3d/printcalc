@@ -31,7 +31,11 @@ const HOURS_PER_YEAR: f64 = 8760.0;
 /// which owns where they come from (the CLI loads them from
 /// `~/.config/printcalc/config.toml`; anything without a filesystem, like
 /// `printcalc-wasm`, just uses [`CostDefaults::default`]).
+///
+/// `#[non_exhaustive]`: start from [`CostDefaults::new`] and chain the
+/// `with_*` setters. Fields stay public to read and assign.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct CostDefaults {
     /// Fallback for `Job::electricity_cost_per_kwh_override`.
     pub electricity_cost_per_kwh: f64,
@@ -59,12 +63,39 @@ impl Default for CostDefaults {
     }
 }
 
+impl CostDefaults {
+    /// The documented defaults — same as [`CostDefaults::default`], as a
+    /// starting point for the `with_*` setters.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the electricity cost per kWh.
+    pub fn with_electricity_cost_per_kwh(mut self, value: f64) -> Self {
+        self.electricity_cost_per_kwh = value;
+        self
+    }
+
+    /// Sets the labor rate per hour.
+    pub fn with_labor_rate_per_hour(mut self, value: f64) -> Self {
+        self.labor_rate_per_hour = value;
+        self
+    }
+
+    /// Sets the gross margin percentages to suggest prices at.
+    pub fn with_margin_percentages(mut self, value: Vec<f64>) -> Self {
+        self.margin_percentages = value;
+        self
+    }
+}
+
 /// The full cost breakdown for a job, returned by [`calculate_cost`].
 ///
 /// Every money field is for the **whole batch** — `quantity` is already
 /// folded into all five cost components. `unit_cost` and
 /// [`SuggestedPrice::unit_price`] are the per-unit views.
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[non_exhaustive]
 pub struct CostBreakdown {
     /// How many units this batch covers — `job.quantity`, copied through.
     pub quantity: u32,
@@ -112,6 +143,7 @@ pub struct CostBreakdown {
 /// One selected plate's raw print-time/material numbers, as reported by
 /// the slicer. See [`CostBreakdown::plate_breakdown`].
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[non_exhaustive]
 pub struct PlateLine {
     /// Matches the slicer's own plate numbering (1-based).
     pub plate_index: u32,
@@ -126,6 +158,7 @@ pub struct PlateLine {
 /// One filament profile's contribution to `material_cost`. See
 /// [`CostBreakdown::material_breakdown`].
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[non_exhaustive]
 pub struct MaterialLine {
     /// The contributing [`super::filament::MaterialProfile::name`].
     pub filament_name: String,
@@ -146,6 +179,7 @@ pub struct MaterialLine {
 /// One `job.hardware` item's contribution to `hardware_cost`. See
 /// [`CostBreakdown::hardware_breakdown`].
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[non_exhaustive]
 pub struct HardwareLine {
     /// Copied from `super::job::HardwareItem::name`.
     pub name: String,
@@ -166,6 +200,7 @@ pub struct HardwareLine {
 /// would give (which is only a 37.5% margin). The two are easy to confuse
 /// and differ a lot.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[non_exhaustive]
 pub struct SuggestedPrice {
     /// e.g. `60.0` for a 60% gross margin.
     pub margin_percent: f64,
@@ -179,6 +214,7 @@ pub struct SuggestedPrice {
 /// whatever the file said about it. Payload of
 /// [`CalcError::MissingMaterial`].
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct UnmappedSlot {
     /// The slot's format-native id.
     pub slot_id: String,

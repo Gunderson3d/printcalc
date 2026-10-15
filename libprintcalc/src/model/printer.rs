@@ -15,8 +15,12 @@ use serde::{Deserialize, Serialize};
 /// Which physical process a printer uses — determines which sliced
 /// formats and filament kinds ([`super::filament::MaterialKind`])
 /// are compatible with it.
+///
+/// `#[non_exhaustive]`: other processes may be added. Match with a
+/// wildcard arm.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum PrinterKind {
     /// Fused deposition modeling (filament-based).
     Fdm,
@@ -26,7 +30,11 @@ pub enum PrinterKind {
 
 /// A reusable printer definition, saved under `~/.config/printcalc/printers/`
 /// and referenced from jobs by name (or embedded directly).
+///
+/// `#[non_exhaustive]`: build one with [`PrinterProfile::new`] or parse
+/// one from TOML. Fields stay public to read and assign.
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[non_exhaustive]
 pub struct PrinterProfile {
     /// Also the filename stem it's saved under.
     pub name: String,
@@ -118,8 +126,13 @@ pub const DEFAULT_COST_BUFFER_FACTOR: f64 = 1.3;
 /// [`super::cost::calculate_cost`]. Electricity price isn't
 /// here — it's a per-job or global-config value, since it depends on where
 /// you pay your bill from, not which printer ran the job.
+///
+/// `#[non_exhaustive]`: start from [`WearProfile::new`] (the documented
+/// defaults) and chain the `with_*` setters for what you know. Fields
+/// stay public to read and assign.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
+#[non_exhaustive]
 pub struct WearProfile {
     /// What the printer itself cost.
     pub purchase_price: f64,
@@ -164,7 +177,73 @@ impl Default for WearProfile {
     }
 }
 
+impl WearProfile {
+    /// The documented defaults — same as [`WearProfile::default`], as a
+    /// starting point for the `with_*` setters.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets what the printer itself cost.
+    pub fn with_purchase_price(mut self, value: f64) -> Self {
+        self.purchase_price = value;
+        self
+    }
+
+    /// Sets anything else spent getting it running.
+    pub fn with_additional_upfront_cost(mut self, value: f64) -> Self {
+        self.additional_upfront_cost = value;
+        self
+    }
+
+    /// Sets the expected working lifetime, in years.
+    pub fn with_estimated_life_years(mut self, value: f64) -> Self {
+        self.estimated_life_years = value;
+        self
+    }
+
+    /// Sets the fraction of the year (`0.0`-`1.0`) spent printing.
+    pub fn with_estimated_uptime_percent(mut self, value: f64) -> Self {
+        self.estimated_uptime_percent = value;
+        self
+    }
+
+    /// Sets the expected yearly maintenance spend.
+    pub fn with_annual_maintenance_cost(mut self, value: f64) -> Self {
+        self.annual_maintenance_cost = value;
+        self
+    }
+
+    /// Sets the power draw while printing, in watts.
+    pub fn with_power_consumption_watts(mut self, value: f64) -> Self {
+        self.power_consumption_watts = value;
+        self
+    }
+
+    /// Sets the multiplier over the computed machine rate.
+    pub fn with_cost_buffer_factor(mut self, value: f64) -> Self {
+        self.cost_buffer_factor = value;
+        self
+    }
+
+    /// Sets a flat per-hour rate that replaces the computed machine
+    /// rate entirely.
+    pub fn with_print_time_rate_override(mut self, value: Option<f64>) -> Self {
+        self.print_time_rate_override = value;
+        self
+    }
+}
+
 impl PrinterProfile {
+    /// Builds a profile from its parts.
+    pub fn new(name: impl Into<String>, kind: PrinterKind, wear: WearProfile) -> Self {
+        PrinterProfile {
+            name: name.into(),
+            kind,
+            wear,
+        }
+    }
+
     /// Serializes this profile to the TOML the profile library saves and
     /// [`crate::parse_printer`] reads back.
     pub fn to_toml(&self) -> Result<String, toml::ser::Error> {

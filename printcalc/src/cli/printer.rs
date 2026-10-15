@@ -147,20 +147,16 @@ pub fn run(cmd: PrinterCommand, interactive_mode: bool) -> Result<(), Box<dyn Er
                 interactive_mode,
             )?;
 
-            let profile = PrinterProfile {
-                name: name.clone(),
-                kind,
-                wear: WearProfile {
-                    purchase_price,
-                    additional_upfront_cost,
-                    estimated_life_years,
-                    estimated_uptime_percent,
-                    annual_maintenance_cost,
-                    power_consumption_watts,
-                    cost_buffer_factor,
-                    print_time_rate_override: print_time_rate,
-                },
-            };
+            let wear = WearProfile::new()
+                .with_purchase_price(purchase_price)
+                .with_additional_upfront_cost(additional_upfront_cost)
+                .with_estimated_life_years(estimated_life_years)
+                .with_estimated_uptime_percent(estimated_uptime_percent)
+                .with_annual_maintenance_cost(annual_maintenance_cost)
+                .with_power_consumption_watts(power_consumption_watts)
+                .with_cost_buffer_factor(cost_buffer_factor)
+                .with_print_time_rate_override(print_time_rate);
+            let profile = PrinterProfile::new(name.clone(), kind, wear);
             ops::add_printer(&profile)?;
             println!("saved printer {name:?}");
             Ok(())

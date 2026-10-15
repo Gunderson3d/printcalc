@@ -47,8 +47,12 @@ pub enum SourceFormat {
 ///
 /// Everything is optional and best-effort: a format that doesn't report a
 /// field just leaves it `None`.
+///
+/// `#[non_exhaustive]`: start from [`SliceMeta::default`] and chain the
+/// `with_*` setters. Fields stay public to read and assign.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
+#[non_exhaustive]
 pub struct SliceMeta {
     /// The slicer's own printer *profile* name, e.g. `"Prusa MINI 0.4
     /// nozzle"` or `"Bambu Lab P2S 0.4 nozzle"` — more specific than
@@ -72,6 +76,36 @@ pub struct SliceMeta {
 }
 
 impl SliceMeta {
+    /// Sets the slicer's printer profile name.
+    pub fn with_printer_profile(mut self, value: impl Into<String>) -> Self {
+        self.printer_profile = Some(value.into());
+        self
+    }
+
+    /// Sets the slicer's print/quality profile name.
+    pub fn with_print_profile(mut self, value: impl Into<String>) -> Self {
+        self.print_profile = Some(value.into());
+        self
+    }
+
+    /// Sets the printer variant label.
+    pub fn with_printer_variant(mut self, value: impl Into<String>) -> Self {
+        self.printer_variant = Some(value.into());
+        self
+    }
+
+    /// Sets the nozzle diameter in mm.
+    pub fn with_nozzle_diameter(mut self, value: f64) -> Self {
+        self.nozzle_diameter = Some(value);
+        self
+    }
+
+    /// Sets which slicer wrote the file.
+    pub fn with_slicer(mut self, value: impl Into<String>) -> Self {
+        self.slicer = Some(value.into());
+        self
+    }
+
     /// Whether every field is unset — the "format reported nothing" case,
     /// skipped entirely when serializing.
     pub fn is_empty(&self) -> bool {
@@ -82,7 +116,11 @@ impl SliceMeta {
 /// The common shape every format parser ([`crate::formats::SliceParser`])
 /// extracts from a sliced file — print time and material usage, per plate,
 /// plus whatever identifying [`SliceMeta`] the format carried.
+///
+/// `#[non_exhaustive]`: normally the output of a parser; build one by
+/// hand with [`SliceSummary::new`]. Fields stay public to read and assign.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct SliceSummary {
     /// Which parser produced this summary.
     pub source_format: SourceFormat,
@@ -96,6 +134,22 @@ pub struct SliceSummary {
 }
 
 impl SliceSummary {
+    /// A summary with empty [`SliceMeta`]. `plates` should have at least
+    /// one entry.
+    pub fn new(source_format: SourceFormat, plates: Vec<PlateSummary>) -> Self {
+        SliceSummary {
+            source_format,
+            meta: SliceMeta::default(),
+            plates,
+        }
+    }
+
+    /// Sets the file-wide slicer/printer identity.
+    pub fn with_meta(mut self, meta: SliceMeta) -> Self {
+        self.meta = meta;
+        self
+    }
+
     /// Every distinct `FilamentUsage::slot_id` with nonzero usage on any
     /// plate, sorted. Used to decide whether a job needs one filament
     /// (`--filament`) or a per-slot map (`--filament-map`) — and, for the
@@ -152,7 +206,11 @@ impl SliceSummary {
 
 /// One plate's worth of a sliced file — print time and every filament slot
 /// with nonzero usage on it.
+///
+/// `#[non_exhaustive]`: build one with [`PlateSummary::new`]. Fields stay
+/// public to read and assign.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct PlateSummary {
     /// 1-based, matches the slicer's own plate numbering.
     pub plate_index: u32,
@@ -173,6 +231,42 @@ pub struct PlateSummary {
     pub extra: HashMap<String, String>,
 }
 
+impl PlateSummary {
+    /// A plate with no printer model, layer height or extras.
+    pub fn new(
+        plate_index: u32,
+        print_time_seconds: f64,
+        filament_usage: Vec<FilamentUsage>,
+    ) -> Self {
+        PlateSummary {
+            plate_index,
+            print_time_seconds,
+            filament_usage,
+            printer_model: None,
+            layer_height: None,
+            extra: HashMap::new(),
+        }
+    }
+
+    /// Sets the printer model the slicer targeted.
+    pub fn with_printer_model(mut self, value: impl Into<String>) -> Self {
+        self.printer_model = Some(value.into());
+        self
+    }
+
+    /// Sets the layer height in mm.
+    pub fn with_layer_height(mut self, value: f64) -> Self {
+        self.layer_height = Some(value);
+        self
+    }
+
+    /// Sets the format-specific extras.
+    pub fn with_extra(mut self, extra: HashMap<String, String>) -> Self {
+        self.extra = extra;
+        self
+    }
+}
+
 /// One filament/resin slot's usage on a plate — a Bambu AMS tray, a
 /// multi-extruder Prusa slot, or the sole slot of a single-material print.
 ///
@@ -181,7 +275,12 @@ pub struct PlateSummary {
 /// that doesn't report a field leaves it `None`, and nothing in the cost
 /// calc depends on any of it — it exists so a job can be built without the
 /// caller retyping what the file already says.
+///
+/// `#[non_exhaustive]`: build one with [`FilamentUsage::grams`] or
+/// [`FilamentUsage::ml`] and the `with_*` setters. Fields stay public to
+/// read and assign.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct FilamentUsage {
     /// Opaque, format-native slot id — whatever the slicer itself uses to
     /// distinguish slots (AMS tray `id`, Prusa extruder index, ...).
@@ -224,9 +323,74 @@ pub struct FilamentUsage {
     pub ml: Option<f64>,
 }
 
+impl FilamentUsage {
+    /// Filament usage: `grams` deposited from `slot_id`.
+    pub fn grams(slot_id: impl Into<String>, grams: f64) -> Self {
+        FilamentUsage {
+            slot_id: slot_id.into(),
+            grams: Some(grams),
+            ..Default::default()
+        }
+    }
+
+    /// Resin usage: `ml` consumed from `slot_id`.
+    pub fn ml(slot_id: impl Into<String>, ml: f64) -> Self {
+        FilamentUsage {
+            slot_id: slot_id.into(),
+            ml: Some(ml),
+            ..Default::default()
+        }
+    }
+
+    /// Sets the material family as the slicer reports it.
+    pub fn with_material_type(mut self, value: impl Into<String>) -> Self {
+        self.material_type = Some(value.into());
+        self
+    }
+
+    /// Sets the display color.
+    pub fn with_color(mut self, value: impl Into<String>) -> Self {
+        self.color = Some(value.into());
+        self
+    }
+
+    /// Sets the slicer's filament/resin profile name.
+    pub fn with_profile_name(mut self, value: impl Into<String>) -> Self {
+        self.profile_name = Some(value.into());
+        self
+    }
+
+    /// Sets the manufacturer as the slicer reports it.
+    pub fn with_vendor(mut self, value: impl Into<String>) -> Self {
+        self.vendor = Some(value.into());
+        self
+    }
+
+    /// Sets the price the slicer's own profile carries.
+    pub fn with_price(mut self, value: f64) -> Self {
+        self.price = Some(value);
+        self
+    }
+
+    /// Sets the material density in g/cm³.
+    pub fn with_density(mut self, value: f64) -> Self {
+        self.density = Some(value);
+        self
+    }
+
+    /// Sets the length of filament used, in meters.
+    pub fn with_meters(mut self, value: f64) -> Self {
+        self.meters = Some(value);
+        self
+    }
+}
+
 /// One slot's totals across every plate, plus the slicer's description of
 /// the filament in it. Built by [`SliceSummary::slots`].
+///
+/// `#[non_exhaustive]`: read-only output of the library.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct SlotUsage {
     /// The slot's format-native id, as in [`FilamentUsage::slot_id`].
     pub slot_id: String,

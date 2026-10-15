@@ -74,11 +74,13 @@ use libprintcalc::{
     MaterialKind, PrinterKind, ProfileRef, WearProfile, SINGLE_MATERIAL_SLOT,
 };
 
-let printer = create_printer("mini", PrinterKind::Fdm, WearProfile {
-    purchase_price: 429.0,
-    power_consumption_watts: 80.0,
-    ..WearProfile::default()
-});
+let printer = create_printer(
+    "mini",
+    PrinterKind::Fdm,
+    WearProfile::new()
+        .with_purchase_price(429.0)
+        .with_power_consumption_watts(80.0),
+);
 let filament = create_material("pla-grey", MaterialKind::Filament, 21.50, 1.5, None, None);
 
 let job = new_job(
@@ -103,8 +105,27 @@ let breakdown = calculate_cost(
 )?;
 ```
 
-`..WearProfile::default()` fills in anything you don't state with the
-[documented defaults](../reference/pricing.md#5-defaults).
+`WearProfile::new()` starts from the
+[documented defaults](../reference/pricing.md#5-defaults); each `with_*`
+setter overrides one field.
+
+## Construct types, don't spell them out
+
+Every public struct in `libprintcalc` is `#[non_exhaustive]`, so a struct
+literal or `..Default::default()` update won't compile from outside the
+crate. Build values with their constructors and `with_*` setters
+(`Job::new`, `MaterialProfile::new`, `PrinterProfile::new`,
+`WearProfile::new`, `LaborCost::new`, `HardwareItem::new`,
+`SliceSummary::new`, `PlateSummary::new`, `FilamentUsage::grams`/`ml`,
+`CostDefaults::new`). Fields stay public, so reading and assigning them
+directly still works. This is what lets a minor release add a field
+without breaking your build.
+
+The public enums `MaterialKind`, `PrinterKind`, `JobTier` and
+`SourceFormat` are `#[non_exhaustive]` too, so a `match` on one needs a
+wildcard arm. `ProfileRef` and `JobSource` are deliberately not: a new
+variant there would change what a job *is*, and that should be a visible
+breaking change.
 
 ## Choose between `calculate` and `calculate_cost`
 

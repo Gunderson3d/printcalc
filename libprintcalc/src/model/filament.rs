@@ -12,13 +12,37 @@ use serde::{Deserialize, Serialize};
 /// resin (typically priced/measured by volume). Must match the printer
 /// ([`super::printer::PrinterKind`]) and the sliced file's format it's
 /// costed against — [`super::cost::calculate_cost`] rejects a mismatch.
+///
+/// `#[non_exhaustive]`: other processes (SLS powder, ...) may be added.
+/// Match with a wildcard arm, or use [`MaterialKind::price_unit`] rather
+/// than matching at all.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum MaterialKind {
     /// Spooled filament (FDM).
     Filament,
     /// Liquid resin (SLA/MSLA).
     Resin,
+}
+
+impl MaterialKind {
+    /// What [`MaterialProfile::price`] is per: `"kg"` for filament,
+    /// `"L"` for resin.
+    pub fn price_unit(self) -> &'static str {
+        match self {
+            MaterialKind::Filament => "kg",
+            MaterialKind::Resin => "L",
+        }
+    }
+
+    /// What usage is measured in: `"g"` for filament, `"ml"` for resin.
+    pub fn usage_unit(self) -> &'static str {
+        match self {
+            MaterialKind::Filament => "g",
+            MaterialKind::Resin => "ml",
+        }
+    }
 }
 
 /// Default spool price when a profile doesn't state one — per kg of
@@ -38,7 +62,12 @@ fn default_efficiency_factor() -> f64 {
 /// A reusable material definition, saved under `~/.config/printcalc/filaments/`
 /// and referenced from jobs by name (or embedded directly), keyed by slot in
 /// [`super::job::Job::material`].
+///
+/// `#[non_exhaustive]`: build one with [`MaterialProfile::new`] and the
+/// `with_*` setters, or parse one from TOML. Fields stay public to read
+/// and assign.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct MaterialProfile {
     /// Also the filename stem it's saved under.
     pub name: String,
@@ -62,6 +91,43 @@ pub struct MaterialProfile {
 }
 
 impl MaterialProfile {
+    /// A profile at the default price and efficiency factor, with no
+    /// color or vendor. Chain the `with_*` setters to fill in the rest.
+    pub fn new(name: impl Into<String>, kind: MaterialKind) -> Self {
+        MaterialProfile {
+            name: name.into(),
+            kind,
+            price: DEFAULT_PRICE,
+            efficiency_factor: DEFAULT_EFFICIENCY_FACTOR,
+            color: None,
+            vendor: None,
+        }
+    }
+
+    /// Sets the price per kg (filament) or per liter (resin).
+    pub fn with_price(mut self, price: f64) -> Self {
+        self.price = price;
+        self
+    }
+
+    /// Sets the waste/purge multiplier.
+    pub fn with_efficiency_factor(mut self, factor: f64) -> Self {
+        self.efficiency_factor = factor;
+        self
+    }
+
+    /// Sets the display color.
+    pub fn with_color(mut self, color: impl Into<String>) -> Self {
+        self.color = Some(color.into());
+        self
+    }
+
+    /// Sets the manufacturer name.
+    pub fn with_vendor(mut self, vendor: impl Into<String>) -> Self {
+        self.vendor = Some(vendor.into());
+        self
+    }
+
     /// Serializes this profile to the TOML the profile library saves and
     /// [`crate::parse_material`] reads back.
     pub fn to_toml(&self) -> Result<String, toml::ser::Error> {

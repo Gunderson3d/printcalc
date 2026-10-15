@@ -86,10 +86,7 @@ pub fn run(cmd: FilamentCommand, interactive_mode: bool) -> Result<(), Box<dyn E
                     .into());
                 }
             };
-            let price_unit = match kind {
-                MaterialKind::Filament => "kg",
-                MaterialKind::Resin => "liter",
-            };
+            let price_unit = kind.price_unit();
             let price = interactive::defaulted_f64(
                 price,
                 &format!("Price per {price_unit}"),
@@ -102,14 +99,11 @@ pub fn run(cmd: FilamentCommand, interactive_mode: bool) -> Result<(), Box<dyn E
                 DEFAULT_EFFICIENCY_FACTOR,
                 interactive_mode,
             )?;
-            let profile = MaterialProfile {
-                name: name.clone(),
-                kind,
-                price,
-                efficiency_factor,
-                color,
-                vendor,
-            };
+            let mut profile = MaterialProfile::new(name.clone(), kind)
+                .with_price(price)
+                .with_efficiency_factor(efficiency_factor);
+            profile.color = color;
+            profile.vendor = vendor;
             ops::add_filament(&profile)?;
             println!("saved filament {name:?}");
             Ok(())
@@ -131,10 +125,7 @@ pub fn run(cmd: FilamentCommand, interactive_mode: bool) -> Result<(), Box<dyn E
 fn print_filament(f: &MaterialProfile) {
     println!("name: {}", f.name);
     println!("kind: {:?}", f.kind);
-    let price_unit = match f.kind {
-        MaterialKind::Filament => "kg",
-        MaterialKind::Resin => "liter",
-    };
+    let price_unit = f.kind.price_unit();
     println!("price: {} per {price_unit}", f.price);
     println!("efficiency_factor: {}", f.efficiency_factor);
     if let Some(c) = &f.color {

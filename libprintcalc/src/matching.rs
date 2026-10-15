@@ -30,7 +30,10 @@ pub const MIN_CONFIDENCE: f64 = 0.55;
 
 /// A profile guessed from a sliced file, with how sure the guess is and
 /// what it was guessed from.
+///
+/// `#[non_exhaustive]`: read-only output of the library.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct Match<T> {
     /// The matched profile.
     pub profile: T,

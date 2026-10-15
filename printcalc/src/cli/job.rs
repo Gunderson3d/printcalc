@@ -464,11 +464,7 @@ fn parse_hardware_entry(entry: &str) -> Result<HardwareItem, Box<dyn Error>> {
     let quantity: u32 = units.parse().ok().filter(|q| *q > 0).ok_or_else(|| {
         format!("invalid --hardware units {units:?} in {entry:?} (whole number, at least 1)")
     })?;
-    Ok(HardwareItem {
-        name: name.to_string(),
-        cost,
-        quantity,
-    })
+    Ok(HardwareItem::new(name, cost).with_quantity(quantity))
 }
 
 fn print_result(breakdown: &CostBreakdown, format: OutputFormat, color: bool) {
@@ -482,7 +478,7 @@ fn print_result(breakdown: &CostBreakdown, format: OutputFormat, color: bool) {
 }
 
 /// Color is for eyes, not pipes: off when stdout isn't a terminal, and
-/// off when `NO_COLOR` is set to anything (https://no-color.org).
+/// off when `NO_COLOR` is set to anything (<https://no-color.org>).
 fn color_allowed() -> bool {
     std::io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none_or(|v| v.is_empty())
 }

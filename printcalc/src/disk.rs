@@ -215,14 +215,10 @@ mod tests {
     #[test]
     fn save_load_and_list_round_trip() {
         let dir = temp_dir("save-load-list");
-        let profile = MaterialProfile {
-            name: "pla-black".into(),
-            kind: MaterialKind::Filament,
-            price: 18.99,
-            efficiency_factor: 1.1,
-            color: Some("black".into()),
-            vendor: None,
-        };
+        let profile = MaterialProfile::new("pla-black", MaterialKind::Filament)
+            .with_price(18.99)
+            .with_efficiency_factor(1.1)
+            .with_color("black");
 
         save_profile(&dir, &profile.name, &profile).unwrap();
         let loaded: MaterialProfile = load_profile(&dir, "filament", "pla-black").unwrap();

@@ -72,7 +72,10 @@ impl From<SliceSummary> for JobSource {
 
 /// Labor cost input for a job. No sensible global default for `minutes` —
 /// unlike `rate_per_hour`, it's always job-specific.
+///
+/// `#[non_exhaustive]`: build one with [`LaborCost::new`].
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct LaborCost {
     /// `None` => fall back to the global config default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -83,9 +86,28 @@ pub struct LaborCost {
     pub minutes: f64,
 }
 
+impl LaborCost {
+    /// `minutes` of hands-on time per unit, at the global default rate.
+    pub fn new(minutes: f64) -> Self {
+        LaborCost {
+            rate_per_hour: None,
+            minutes,
+        }
+    }
+
+    /// Sets a job-specific hourly rate instead of the global default.
+    pub fn with_rate_per_hour(mut self, rate: f64) -> Self {
+        self.rate_per_hour = Some(rate);
+        self
+    }
+}
+
 /// A flat per-piece extra cost (inserts, magnets, ...) added on top of
 /// material/wear/electricity/labor.
+///
+/// `#[non_exhaustive]`: build one with [`HardwareItem::new`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct HardwareItem {
     /// e.g. "brass insert M3x5".
     pub name: String,
@@ -98,13 +120,35 @@ pub struct HardwareItem {
     pub quantity: u32,
 }
 
+impl HardwareItem {
+    /// One of `name` per unit at `cost` each.
+    pub fn new(name: impl Into<String>, cost: f64) -> Self {
+        HardwareItem {
+            name: name.into(),
+            cost,
+            quantity: 1,
+        }
+    }
+
+    /// Sets how many are used per unit.
+    pub fn with_quantity(mut self, quantity: u32) -> Self {
+        self.quantity = quantity;
+        self
+    }
+}
+
 /// Slot id the `[material]` (singular) sugar always maps to.
 pub const SINGLE_MATERIAL_SLOT: &str = "1";
 
 /// A costable print job: which sliced file (or embedded slice data), which
 /// printer/material profiles to price it against, and whatever job-specific overrides/extras apply.
 /// Costed via [`super::cost::calculate_cost`] once its refs are resolved.
+///
+/// `#[non_exhaustive]`: build one with [`Job::new`] and the `with_*`
+/// setters (or [`crate::new_job`]/[`crate::auto_job`]), or parse one
+/// from TOML. Fields stay public to read and assign.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct Job {
     /// A free-form label — not used for anything besides display/output.
     pub name: String,
@@ -145,7 +189,10 @@ pub struct Job {
 /// (Linked → Embedded, Path → Embedded summary) — there's no way back
 /// down, since a `Linked` ref's name and a `Path` source's original
 /// location aren't recoverable once resolved away.
+///
+/// `#[non_exhaustive]`: match with a wildcard arm.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum JobTier {
     /// Serialize as-is: `Linked` refs stay linked, `Embedded` stay
     /// embedded, the source is untouched.
@@ -167,6 +214,87 @@ pub enum JobTier {
 // expressed by derive alone.
 
 impl Job {
+    /// A one-off job with no materials, labor, hardware or overrides —
+    /// chain the `with_*` setters and [`Job::add_material`] to fill it
+    /// in. Nothing is looked up or read here.
+    pub fn new(
+        name: impl Into<String>,
+        source: impl Into<JobSource>,
+        printer: ProfileRef<PrinterProfile>,
+    ) -> Self {
+        Job {
+            name: name.into(),
+            source: source.into(),
+            plate_selection: None,
+            printer,
+            material: HashMap::new(),
+            default_material: None,
+            quantity: 1,
+            material_efficiency_factor_override: None,
+            electricity_cost_per_kwh_override: None,
+            labor: LaborCost::new(0.0),
+            hardware: Vec::new(),
+            margin_percentages_override: None,
+        }
+    }
+
+    /// Costs only plate `index` (1-based) instead of every plate.
+    pub fn with_plate_selection(mut self, index: Option<u32>) -> Self {
+        self.plate_selection = index;
+        self
+    }
+
+    /// Replaces the whole slot -> material map.
+    pub fn with_materials(
+        mut self,
+        materials: HashMap<String, ProfileRef<MaterialProfile>>,
+    ) -> Self {
+        self.material = materials;
+        self
+    }
+
+    /// Sets the material priced for any used slot `material` doesn't cover.
+    pub fn with_default_material(mut self, material: Option<ProfileRef<MaterialProfile>>) -> Self {
+        self.default_material = material;
+        self
+    }
+
+    /// Sets how many units the job covers.
+    pub fn with_quantity(mut self, quantity: u32) -> Self {
+        self.quantity = quantity;
+        self
+    }
+
+    /// Sets the labor time and rate.
+    pub fn with_labor(mut self, labor: LaborCost) -> Self {
+        self.labor = labor;
+        self
+    }
+
+    /// Replaces the hardware list. See also [`Job::add_hardware`].
+    pub fn with_hardware(mut self, hardware: Vec<HardwareItem>) -> Self {
+        self.hardware = hardware;
+        self
+    }
+
+    /// Overrides every material profile's own efficiency factor.
+    pub fn with_material_efficiency_factor_override(mut self, factor: Option<f64>) -> Self {
+        self.material_efficiency_factor_override = factor;
+        self
+    }
+
+    /// Overrides the global electricity cost per kWh.
+    pub fn with_electricity_cost_per_kwh_override(mut self, cost: Option<f64>) -> Self {
+        self.electricity_cost_per_kwh_override = cost;
+        self
+    }
+
+    /// Overrides the global margin percentages.
+    pub fn with_margin_percentages_override(mut self, margins: Option<Vec<f64>>) -> Self {
+        self.margin_percentages_override = margins;
+        self
+    }
+
     /// Maps `slot` (see [`crate::formats::slice_summary::FilamentUsage::slot_id`])
     /// to `material`, replacing any previous entry for that slot.
     pub fn add_material(&mut self, slot: impl Into<String>, material: ProfileRef<MaterialProfile>) {
