@@ -1,3 +1,5 @@
 /target
 /Testfiles/unziped
 /printcalc-wasm/demo/pkg
+*.3mf
+test.toml

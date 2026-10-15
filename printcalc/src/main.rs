@@ -17,6 +17,7 @@ mod disk;
 mod interactive;
 mod ops;
 
+use std::fs;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
@@ -137,8 +138,10 @@ fn main() {
         Some(Command::Filament(args)) => cli::filament::run(args.command, interactive),
         Some(Command::Config(args)) => cli::config::run(args),
         None => match cli.file {
-            Some(file) => cli::job::run(JobInvocation {
-                file,
+            Some(file) => {
+                let full_file:PathBuf = fs::canonicalize(file).expect("unable to get input file path");
+                cli::job::run(JobInvocation {
+                file: full_file,
                 name: cli.name,
                 printer: cli.printer,
                 filament: cli.filament,
@@ -156,7 +159,7 @@ fn main() {
                 format: cli.format,
                 color: !cli.no_color,
                 interactive,
-            }),
+            })},
             None => {
                 Err("no file given — pass a sliced file or a job .toml, or run `printcalc printer`/`printcalc filament`".into())
             }
