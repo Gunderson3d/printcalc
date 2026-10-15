@@ -210,7 +210,7 @@ it by path and re-reads it each time.
 ## Where to go next
 
 - [Cost a multi-filament job](../how-to/cost-a-multi-filament-job.md) —
-  AMS and IDEX prints, priced per slot.
+  AMS and INDX prints, priced per slot.
 - [Correct a wrong detection](../how-to/correct-a-wrong-detection.md) —
   when the guess is wrong.
 - [Save and reuse jobs](../how-to/save-and-reuse-jobs.md) — making a
