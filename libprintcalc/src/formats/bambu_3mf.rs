@@ -193,8 +193,8 @@ fn parse_slice_info(
     let mut filament_usage: Vec<FilamentUsage> = Vec::new();
 
     for event in EventReader::new(Cursor::new(xml_text.as_bytes())) {
-        let event = event.map_err(|_| {
-            ParseError::InvalidField("slice_info.config", "malformed XML".to_string())
+        let event = event.map_err(|e| {
+            ParseError::InvalidField("slice_info.config", format!("malformed XML: {e}"))
         })?;
         match event {
             XmlEvent::StartElement {

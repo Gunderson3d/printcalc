@@ -141,7 +141,7 @@ fn parse_ini(text: &str) -> HashMap<String, String> {
 fn required_f64(config: &HashMap<String, String>, key: &'static str) -> Result<f64, ParseError> {
     let raw = config.get(key).ok_or(ParseError::MissingField(key))?;
     raw.parse::<f64>()
-        .map_err(|_| ParseError::InvalidField(key, raw.clone()))
+        .map_err(|_parse_err| ParseError::InvalidField(key, raw.clone()))
 }
 
 #[cfg(test)]

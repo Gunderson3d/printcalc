@@ -444,10 +444,11 @@ fn resolve_filaments(
                 interactive_mode,
                 &ops::list_filaments().unwrap_or_default(),
             )?;
-            return Ok(HashMap::from([(
-                slot_ids[0].clone(),
-                ProfileChoice::Named(name),
-            )]));
+            let first_slot = slot_ids
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| "1".to_string());
+            return Ok(HashMap::from([(first_slot, ProfileChoice::Named(name))]));
         }
         return Ok(map);
     }
@@ -484,7 +485,7 @@ fn parse_plate(plate: Option<&str>) -> Result<ops::PlateOverride, Box<dyn Error>
         Some(s) => s
             .parse::<u32>()
             .map(ops::PlateOverride::Only)
-            .map_err(|_| format!("invalid --plate value: {s:?}").into()),
+            .map_err(|_parse_err| format!("invalid --plate value: {s:?}").into()),
     }
 }
 
@@ -532,7 +533,7 @@ fn parse_hardware_entry(entry: &str) -> Result<HardwareItem, Box<dyn Error>> {
     let cost: f64 = price
         .trim_start_matches(|c: char| !c.is_ascii_digit() && c != '.' && c != '-')
         .parse()
-        .map_err(|_| format!("invalid --hardware unit price {price:?} in {entry:?}"))?;
+        .map_err(|_parse_err| format!("invalid --hardware unit price {price:?} in {entry:?}"))?;
     if !cost.is_finite() || cost < 0.0 {
         return Err(format!("invalid --hardware unit price {price:?} in {entry:?}").into());
     }

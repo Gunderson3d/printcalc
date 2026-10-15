@@ -25,7 +25,7 @@ pub fn parse_margins(csv: &str) -> Result<Vec<f64>, Box<dyn std::error::Error>> 
         .map(|s| {
             s.trim()
                 .parse::<f64>()
-                .map_err(|_| format!("invalid --margin entry {s:?}"))
+                .map_err(|_parse_err| format!("invalid --margin entry {s:?}"))
         })
         .collect::<Result<Vec<f64>, _>>()?;
     if let Some(bad) = margins.iter().find(|m| **m >= 100.0 || **m < 0.0) {

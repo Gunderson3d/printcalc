@@ -303,7 +303,7 @@ buffer = 1.2
         let mut unknown = unknown;
         unknown.sort();
         assert_eq!(unknown, ["buffer", "purchase_pric"]);
-        assert_eq!(profile.wear.purchase_price, DEFAULT_PURCHASE_PRICE);
+        assert!((profile.wear.purchase_price - DEFAULT_PURCHASE_PRICE).abs() < f64::EPSILON);
     }
 
     /// Hand-rolling `Deserialize` must not change the file format the

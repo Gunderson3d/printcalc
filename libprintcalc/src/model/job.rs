@@ -782,6 +782,10 @@ ref = "bambu-a1"
 [labor]
 minutes = 10.0
 "#;
-        assert!(toml::from_str::<Job>(toml_str).is_err());
+        let err = toml::from_str::<Job>(toml_str).unwrap_err();
+        assert!(
+            err.to_string().contains("material"),
+            "error should name the missing table, got: {err}"
+        );
     }
 }

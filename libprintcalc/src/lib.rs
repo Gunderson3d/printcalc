@@ -260,7 +260,6 @@ pub fn create_printer(
 /// Builds a material profile from its parts — the same shape
 /// [`parse_material`] produces from TOML. `price` is per kilogram for
 /// [`MaterialKind::Filament`], per liter for [`MaterialKind::Resin`].
-#[allow(clippy::too_many_arguments)]
 pub fn create_material(
     name: impl Into<String>,
     kind: MaterialKind,

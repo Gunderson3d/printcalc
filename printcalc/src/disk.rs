@@ -231,9 +231,19 @@ mod tests {
     use super::*;
     use libprintcalc::model::filament::MaterialKind;
 
+    /// Test cleanup that stays honest: a missing path is fine, any other
+    /// failure is a real problem worth failing the test over.
+    fn remove_dir_if_present(path: &Path) {
+        match fs::remove_dir_all(path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => panic!("couldn't remove {}: {e}", path.display()),
+        }
+    }
+
     fn temp_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("printcalc-test-{name}"));
-        let _ = fs::remove_dir_all(&dir);
+        remove_dir_if_present(&dir);
         dir
     }
 
@@ -257,7 +267,7 @@ mod tests {
             Err(LibraryError::NotFound { .. })
         ));
 
-        let _ = fs::remove_dir_all(&dir);
+        remove_dir_if_present(&dir);
     }
 
     #[test]

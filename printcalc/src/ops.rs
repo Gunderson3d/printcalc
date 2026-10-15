@@ -351,7 +351,10 @@ fn default_efficiency_factor(saved: &[MaterialProfile]) -> f64 {
         return libprintcalc::model::filament::DEFAULT_EFFICIENCY_FACTOR;
     }
     factors.sort_by(|a, b| a.partial_cmp(b).expect("filtered to finite values"));
-    factors[factors.len() / 2]
+    factors
+        .get(factors.len() / 2)
+        .copied()
+        .unwrap_or(libprintcalc::model::filament::DEFAULT_EFFICIENCY_FACTOR)
 }
 
 /// Reads and parses `path` as a sliced file. Exposed on its own so a
@@ -770,6 +773,24 @@ mod tests {
             .with_cost_buffer_factor(1.2)
     }
 
+    /// Test cleanup that stays honest: a missing path is fine, any other
+    /// failure is a real problem worth failing the test over.
+    fn remove_dir_if_present(path: &Path) {
+        match fs::remove_dir_all(path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => panic!("couldn't remove {}: {e}", path.display()),
+        }
+    }
+
+    fn remove_file_if_present(path: &Path) {
+        match fs::remove_file(path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => panic!("couldn't remove {}: {e}", path.display()),
+        }
+    }
+
     fn temp_job_path(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("printcalc-ops-test-{name}.toml"))
     }
@@ -810,7 +831,7 @@ mod tests {
         let path = temp_job_path("bundled");
         save_job(&job, &path).unwrap();
         let breakdown = calc_job(&path, PlateOverride::Keep, Vec::new()).unwrap();
-        let _ = fs::remove_file(&path);
+        remove_file_if_present(&path);
 
         // 10ml * 1.0 factor * ($40/1000) = $0.40
         assert!((breakdown.material_cost - 0.40).abs() < 1e-9);
@@ -827,7 +848,10 @@ mod tests {
     #[test]
     fn calc_job_resolves_default_tier_job_against_library() {
         let config_dir = std::env::temp_dir().join("printcalc-ops-test-config-dir");
-        let _ = fs::remove_dir_all(&config_dir);
+        remove_dir_if_present(&config_dir);
+        // SAFETY: this is the only test in the binary that touches the
+        // environment, and the test harness runs it on its own thread
+        // without any other thread reading env vars concurrently.
         unsafe {
             std::env::set_var("PRINTCALC_CONFIG_DIR", &config_dir);
         }
@@ -911,7 +935,8 @@ mod tests {
         assert!(matches!(bundled.source, JobSource::Embedded(_)));
         let bundled_path = temp_job_path("bundled-retiered");
         save_job(&bundled, &bundled_path).unwrap();
-        let _ = fs::remove_dir_all(&config_dir); // library gone...
+        remove_dir_if_present(&config_dir); // library gone...
+        // SAFETY: as above — no concurrent reader of the environment.
         unsafe {
             std::env::remove_var("PRINTCALC_CONFIG_DIR");
         }
@@ -923,8 +948,8 @@ mod tests {
             Err(OpsError::Invalid(_))
         ));
 
-        let _ = fs::remove_file(&path);
-        let _ = fs::remove_file(&bundled_path);
+        remove_file_if_present(&path);
+        remove_file_if_present(&bundled_path);
 
         // Shape-Box.sl1s uses 2.598598 ml of resin.
         // Rounded to 4dp on the way out, so not an exact product.

@@ -164,6 +164,6 @@ kind = "filament"
         )
         .unwrap();
         assert_eq!(unknown, ["pryce"]);
-        assert_eq!(profile.price, DEFAULT_PRICE);
+        assert!((profile.price - DEFAULT_PRICE).abs() < f64::EPSILON);
     }
 }

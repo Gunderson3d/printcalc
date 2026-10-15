@@ -93,7 +93,10 @@ pub fn build_slice_summary(
     // `filament_vendor` is often a single value even on a multi-slot
     // print (all slots from one maker) — reuse it for every slot then.
     let vendor_at = |i: usize| -> Option<String> {
-        let single = (vendors.len() == 1).then(|| vendors[0].clone());
+        let single = match vendors.as_slice() {
+            [only] => Some(only.clone()),
+            _ => None,
+        };
         pick(&vendors, i).or(single)
     };
 
@@ -103,7 +106,7 @@ pub fn build_slice_summary(
             let grams: f64 = raw
                 .trim()
                 .parse()
-                .map_err(|_| ParseError::InvalidField(GRAMS_KEY, grams_raw.clone()))?;
+                .map_err(|_parse_err| ParseError::InvalidField(GRAMS_KEY, grams_raw.clone()))?;
             if grams == 0.0 {
                 continue; // extruder slot not used on this print
             }
@@ -124,7 +127,7 @@ pub fn build_slice_summary(
     } else {
         let grams: f64 = grams_raw
             .parse()
-            .map_err(|_| ParseError::InvalidField(GRAMS_KEY, grams_raw.clone()))?;
+            .map_err(|_parse_err| ParseError::InvalidField(GRAMS_KEY, grams_raw.clone()))?;
         vec![FilamentUsage {
             slot_id: "1".to_string(),
             material_type: pick(&types, 0),
@@ -266,7 +269,10 @@ mod tests {
     fn build_slice_summary_requires_time_and_grams() {
         let mut metadata = HashMap::new();
         metadata.insert("filament used [g]".to_string(), "3.10".to_string());
-        assert!(build_slice_summary(&metadata, SourceFormat::Gcode).is_err());
+        assert!(matches!(
+            build_slice_summary(&metadata, SourceFormat::Gcode),
+            Err(ParseError::MissingField(key)) if key == TIME_KEY
+        ));
     }
 
     /// PrusaSlicer quotes `filament_settings_id` and separates its text

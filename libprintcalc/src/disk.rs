@@ -85,10 +85,20 @@ mod tests {
 
     /// Profiles round-trip through the same TOML the CLI's library saves,
     /// and a missing file surfaces as `Error::Io`.
+    /// Test cleanup that stays honest: a missing path is fine, any other
+    /// failure is a real problem worth failing the test over.
+    fn remove_dir_if_present(path: &Path) {
+        match fs::remove_dir_all(path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => panic!("couldn't remove {}: {e}", path.display()),
+        }
+    }
+
     #[test]
     fn read_profiles_and_job_from_disk() {
         let dir = std::env::temp_dir().join("printcalc-test-disk");
-        let _ = fs::remove_dir_all(&dir);
+        remove_dir_if_present(&dir);
         fs::create_dir_all(&dir).unwrap();
 
         let printer_path = dir.join("printer.toml");
@@ -130,7 +140,7 @@ efficiency_factor = 1.1
             Error::Io(_)
         ));
 
-        let _ = fs::remove_dir_all(&dir);
+        remove_dir_if_present(&dir);
     }
 
     /// `Job::slice_summary` clones an embedded summary straight through and

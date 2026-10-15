@@ -16,7 +16,9 @@ impl SliceParser for Gcode {
     }
 
     fn parse(bytes: &[u8]) -> Result<SliceSummary, ParseError> {
-        let text = std::str::from_utf8(bytes).map_err(|_| ParseError::NotThisFormat)?;
+        // Non-UTF-8 means a binary file, which isn't this format at all —
+        // the decode error's byte offset adds nothing to that verdict.
+        let text = std::str::from_utf8(bytes).map_err(|_utf8_err| ParseError::NotThisFormat)?;
         let comment_lines = text
             .lines()
             .filter_map(|line| line.trim_start().strip_prefix(';'));
