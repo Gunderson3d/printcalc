@@ -66,18 +66,6 @@ away to infinity. A 100% margin would mean a sale with no cost at all.
 infinity. There is no sensible answer to return, and a price of `inf`
 printed in a quote is worse than an error.
 
-## What this means if you used an older version
-
-`printcalc` originally applied these percentages as markups. It now
-applies them as margins. **Every price the tool prints has changed** — a
-60% tier that used to mean 1.6× cost now means 2.5× cost.
-
-The configuration keys were renamed to match (`margin_percentages`,
-`--margin`, `margin_percentages_override`). The old spellings still load
-so existing files keep working — but their numbers now mean margins. If
-you had `markup_percentages = [50, 60, 70]` and meant markups, the
-equivalent margins are roughly `[33, 37.5, 41]`.
-
 ## See also
 
 - [Pricing reference](../reference/pricing.md#3-total-and-suggested-price)
