@@ -31,6 +31,10 @@ slicer recorded and matches them against your profiles — see
 Precedence is `--filament-map`, then `--filament`, then detection, then a
 prompt (or an error under `--no-input`).
 
+On a job `.toml`, `-q`, `-P`, `-e`, `--margin`, `--efficiency-factor`
+and `--hardware` override the saved values for that run, and `-o` writes
+the result back. `--hardware` appends rather than replaces.
+
 `--filament` expands per slot when the job is saved, so the mapping is
 visible in the file. `--default-filament` stays a single job-level
 fallback. See [job files](job-file.md#materials).
@@ -42,7 +46,10 @@ fallback. See [job files](job-file.md#materials).
 | `-n, --name <NAME>` | output stem, else input stem | A label for the job. |
 | `-m, --labor-minutes <N>` | prompt | Hands-on time **per unit** — setup, removal, finishing. |
 | `-r, --labor-rate <N>` | global config (`15.0`) | Labor rate per hour for this job. |
-| `-q, --quantity <N>` | `1` | Units in the batch. Scales every cost. |
+| `-q, --quantity <N>` | `1` | Units in the batch. Scales every cost. On a job `.toml`, overrides the saved quantity. |
+| `-e, --electricity-cost <N>` | global config (`0.14`) | Electricity cost per kWh for this job. |
+| `--margin <LIST>` | global config (`50,60,70`) | Margin percentages for this job, comma-separated. Margins, not markups. |
+| `--efficiency-factor <N>` | each profile's own | Waste allowance for this job, replacing every material's own factor. |
 | `-H, --hardware <NAME:PRICE[:UNITS]>` | — | Extra per-unit cost — inserts, magnets, packaging. `M3 insert:0.08:4` is four at $0.08 each **per print**; units default to `1`. Repeatable; `--extra` is an alias. On a job `.toml`, adds to the file's existing entries. |
 | `-P, --plate <P>` | `all` | `all` or a plate number. Ignored with a warning for single-plate formats. |
 
@@ -89,6 +96,8 @@ Manages saved printer profiles. See
 
 ```
 printcalc printer add [OPTIONS]
+printcalc printer edit <NAME> [OPTIONS]
+printcalc printer remove <NAME>      # alias: rm
 printcalc printer list
 printcalc printer show <NAME>
 ```
@@ -96,6 +105,14 @@ printcalc printer show <NAME>
 `add` needs only `--name`; every numeric field falls back to its
 [default](pricing.md#5-defaults). Interactively it prompts with each
 default shown, and a blank answer accepts it.
+
+`edit` takes the same flags. Anything not passed keeps its saved value;
+interactively each prompt shows the saved value instead of the default.
+`--no-print-time-rate` clears a flat rate. Editing a built-in preset
+saves a copy under the same name that shadows it from then on.
+
+`remove` deletes a saved profile. A built-in preset can't be removed;
+removing a saved profile that shadows one brings the preset back.
 
 | Flag | Default |
 |---|---|
@@ -109,9 +126,11 @@ default shown, and a blank answer accepts it.
 | `--power-consumption-watts <N>` | `160.0` |
 | `--cost-buffer-factor <N>` | `1.3` |
 | `--print-time-rate <N>` | unset |
+| `--no-print-time-rate` | — |
 
 `--print-time-rate` replaces the entire computed machine rate —
-depreciation, electricity and buffer factor alike.
+depreciation, electricity and buffer factor alike. `--no-print-time-rate`
+removes it again (only meaningful on `edit`).
 
 ## printcalc filament
 
@@ -120,9 +139,14 @@ Manages saved filament and resin profiles. See
 
 ```
 printcalc filament add [OPTIONS]
+printcalc filament edit <NAME> [OPTIONS]
+printcalc filament remove <NAME>      # alias: rm
 printcalc filament list
 printcalc filament show <NAME>
 ```
+
+`edit` and `remove` behave as for printers. `edit` prompts for price and
+efficiency factor only; `--color` and `--vendor` are flag-only.
 
 | Flag | Default |
 |---|---|
@@ -144,12 +168,42 @@ values.
 | `-e, --electricity-cost <N>` | `0.14` |
 | `-r, --labor-rate <N>` | `15.0` |
 | `--margin <LIST>` | `50,60,70` |
+| `-c, --currency <SYMBOL>` | `$` |
+
+`--currency` is the symbol printed before every amount — `€`, `£`,
+`"kr "`. Display only; nothing is converted.
 
 `--margin` takes comma-separated gross **margin** percentages — the share
 of the sale price that isn't cost, so 60 prices at `cost / 0.40`. Values
 of 100 or more are rejected. `--markup` is accepted as an alias, but its
 numbers mean margins. See
 [margins are not markups](../explanation/margins-not-markups.md).
+
+## printcalc completions
+
+```
+printcalc completions <bash|elvish|fish|powershell|zsh>
+```
+
+Prints a completion script for that shell to stdout. Where to put it is
+the shell's business; typical:
+
+```sh
+printcalc completions bash > ~/.local/share/bash-completion/completions/printcalc
+printcalc completions zsh  > ~/.zfunc/_printcalc      # with ~/.zfunc on $fpath
+printcalc completions fish > ~/.config/fish/completions/printcalc.fish
+```
+
+Release archives for Linux and macOS ship these under `completions/`.
+
+## printcalc man
+
+```
+printcalc man > ~/.local/share/man/man1/printcalc.1
+```
+
+Prints the man page in roff to stdout. Release archives ship it as
+`man/printcalc.1`.
 
 ## Environment
 

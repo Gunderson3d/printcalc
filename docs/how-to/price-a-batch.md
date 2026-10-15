@@ -81,17 +81,14 @@ printcalc batch.toml -H "sticker:0.05:2"
 
 ## Change the quantity later
 
-Edit `quantity` in the saved job and re-cost it:
-
-```toml
-quantity = 25
-```
+Pass `-q` on the saved job:
 
 ```sh
-printcalc batch.toml
+printcalc batch.toml -q 25                 # price 25, leave the file alone
+printcalc batch.toml -q 25 -o batch.toml   # and save the new quantity
 ```
 
-Nothing else has to change.
+Or edit `quantity` in the file directly. Nothing else has to change.
 
 ## See also
 

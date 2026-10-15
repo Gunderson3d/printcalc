@@ -30,6 +30,8 @@ prusa-bgcode = ["libprintcalc/prusa-bgcode"]
 
 [dependencies]
 clap = { version = "4.6.7", features = ["derive"] }
+clap_complete = "4.6.11"
+clap_mangen = "0.3.3"
 dirs = "7.0.0"
 libprintcalc = { path = "../libprintcalc", version = "0.2.0", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }

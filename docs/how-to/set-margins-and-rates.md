@@ -6,7 +6,7 @@ front of the defaults.
 ## Set the global defaults
 
 ```sh
-printcalc config --electricity-cost 0.31 --labor-rate 22 --margin 40,55,65
+printcalc config --electricity-cost 0.31 --labor-rate 22 --margin 40,55,65 --currency "€"
 ```
 
 With no flags, `printcalc config` prints the current values:
@@ -16,7 +16,12 @@ $ printcalc config
 electricity_cost_per_kwh: 0.31
 labor_rate_per_hour: 22
 margin_percentages: [40.0, 55.0, 65.0]
+currency_symbol: "€"
 ```
+
+`--currency` only changes the symbol in front of each amount. Nothing is
+converted; your profiles and the output are in whatever currency you
+entered them in.
 
 These are saved to `~/.config/printcalc/config.toml` and apply to every
 job that doesn't override them.
@@ -33,23 +38,25 @@ for compatibility, but its numbers mean margins. See
 
 ## Override for one job
 
-Any of the three can be set per job without touching the global config.
-
-Labor rate, at the command line:
+Any of the three can be set per job without touching the global config:
 
 ```sh
-printcalc widget.gcode -r 35 ...
+printcalc widget.gcode -r 35 -e 0.48 --margin 45,60 ...
 ```
 
-Electricity and margins, in a saved job file:
+The same flags work on a saved job, for that run only, or written back
+with `-o`:
+
+```sh
+printcalc widget.toml --margin 45,60                  # just this calc
+printcalc widget.toml --margin 45,60 -o widget.toml   # and save it
+```
+
+In the job file they appear as:
 
 ```toml
 electricity_cost_per_kwh_override = 0.48
 margin_percentages_override = [45.0, 60.0]
-```
-
-```sh
-printcalc widget.toml
 ```
 
 ## Charge a flat machine rate instead of deriving one
@@ -78,11 +85,31 @@ Per profile:
 printcalc filament add --name pla-clean --price 21.50 --efficiency-factor 1.15
 ```
 
-For one job, across every material at once, in the job file:
+For one job, across every material at once:
+
+```sh
+printcalc widget.gcode --efficiency-factor 1.2 ...
+```
+
+which a saved job stores as:
 
 ```toml
 material_efficiency_factor_override = 1.2
 ```
+
+## Change a saved profile
+
+Filament prices move. Edit the profile instead of re-adding it:
+
+```sh
+printcalc filament edit pla-grey --price 23.90
+printcalc printer edit mini --power-consumption-watts 90
+printcalc filament remove old-brand
+```
+
+Anything not passed keeps its saved value. Editing a built-in preset
+saves a copy under the same name that shadows it; removing that copy
+brings the preset back.
 
 ## Use a separate set of defaults
 

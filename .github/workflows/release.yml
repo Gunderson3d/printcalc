@@ -47,13 +47,26 @@ jobs:
           if [ "${{ matrix.cross }}" = "true" ]; then tool=cross; fi
           $tool build --release --package printcalc --bin printcalc --target ${{ matrix.target }}
 
+      # Completions and the man page come out of the binary, so only a
+      # host-runnable (non-cross) build can generate them.
+      - name: Generate completions and man page
+        if: runner.os != 'Windows' && !matrix.cross
+        shell: bash
+        run: |
+          bin="target/${{ matrix.target }}/release/printcalc"
+          mkdir -p dist/completions dist/man
+          for shell in bash zsh fish elvish powershell; do
+            "$bin" completions "$shell" > "dist/completions/printcalc.$shell"
+          done
+          "$bin" man > dist/man/printcalc.1
+
       - name: Package archive (tar.gz)
         if: runner.os != 'Windows'
         shell: bash
         run: |
           mkdir -p dist
           cp "target/${{ matrix.target }}/release/printcalc" dist/
-          tar -czf "printcalc-${{ matrix.target }}.tar.gz" -C dist printcalc
+          tar -czf "printcalc-${{ matrix.target }}.tar.gz" -C dist .
 
       - name: Package archive (zip)
         if: runner.os == 'Windows'

@@ -20,7 +20,7 @@ use clap::ValueEnum;
 use libprintcalc::formats::slice_summary::{SliceSummary, SlotUsage};
 use libprintcalc::model::cost::CostBreakdown;
 use libprintcalc::model::filament::MaterialProfile;
-use libprintcalc::model::job::HardwareItem;
+use libprintcalc::model::job::{HardwareItem, Job};
 use libprintcalc::model::printer::PrinterProfile;
 
 use crate::interactive;
@@ -74,7 +74,15 @@ pub struct JobInvocation {
     pub labor_minutes: Option<f64>,
     pub labor_rate: Option<f64>,
     /// How many units to price. All costs and prices are for the batch.
-    pub quantity: u32,
+    /// `None` means 1 for a new job, or "keep the saved value" for a job
+    /// `.toml`.
+    pub quantity: Option<u32>,
+    /// `--electricity-cost`: per-job override of the global default.
+    pub electricity_cost: Option<f64>,
+    /// `--margin`, unparsed: per-job override of the global margins.
+    pub margin: Option<String>,
+    /// `--efficiency-factor`: per-job override of every material's own.
+    pub efficiency_factor: Option<f64>,
     /// `--hardware` entries, unparsed: `name:unit price[:units]`.
     pub hardware: Vec<String>,
     /// Skip reading the printer/filament the sliced file names, and ask
@@ -88,6 +96,62 @@ pub struct JobInvocation {
     /// Re-tier an existing job (`full` or `bundled` only) instead of
     /// calc'ing it — only meaningful when `file` is a `.toml`. Needs `-o`.
     pub retier: Option<JobType>,
+}
+
+/// Everything on the command line that adjusts a job after it's built —
+/// shared by the new-job path (where these become the job's initial
+/// values) and the job-file path (where they override what's saved).
+struct Overrides {
+    plate: ops::PlateOverride,
+    hardware: Vec<HardwareItem>,
+    quantity: Option<u32>,
+    electricity_cost: Option<f64>,
+    margins: Option<Vec<f64>>,
+    efficiency_factor: Option<f64>,
+}
+
+impl Overrides {
+    fn parse(inv: &JobInvocation) -> Result<Self, Box<dyn Error>> {
+        Ok(Overrides {
+            plate: parse_plate(inv.plate.as_deref())?,
+            hardware: parse_hardware(&inv.hardware)?,
+            quantity: inv.quantity,
+            electricity_cost: inv.electricity_cost,
+            margins: inv
+                .margin
+                .as_deref()
+                .map(super::parse_margins)
+                .transpose()?,
+            efficiency_factor: inv.efficiency_factor,
+        })
+    }
+
+    /// Applies to a loaded job. Hardware is appended, everything else
+    /// replaces the saved value only when the flag was given.
+    fn apply(self, job: &mut Job) {
+        self.plate.apply(job);
+        job.hardware.extend(self.hardware);
+        if let Some(q) = self.quantity {
+            job.quantity = q;
+        }
+        if self.electricity_cost.is_some() {
+            job.electricity_cost_per_kwh_override = self.electricity_cost;
+        }
+        if self.margins.is_some() {
+            job.margin_percentages_override = self.margins;
+        }
+        if self.efficiency_factor.is_some() {
+            job.material_efficiency_factor_override = self.efficiency_factor;
+        }
+    }
+}
+
+/// The configured currency symbol, or `$` if the config can't be read —
+/// a display detail shouldn't stop a calc that otherwise works.
+fn currency_symbol() -> String {
+    ops::show_config()
+        .map(|c| c.currency_symbol)
+        .unwrap_or_else(|_| "$".to_string())
 }
 
 pub fn run(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
@@ -105,17 +169,15 @@ pub fn run(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
         // persisted if -o saves a copy below, calc-only otherwise (e.g.
         // pricing just one plate out of a Bundled job saved with "all",
         // without needing the original sliced file).
-        let plate = parse_plate(inv.plate.as_deref())?;
-        let hardware = parse_hardware(&inv.hardware)?;
+        let overrides = Overrides::parse(&inv)?;
         let mut job = ops::load_job(&inv.file)?;
-        plate.apply(&mut job);
-        job.hardware.extend(hardware);
+        overrides.apply(&mut job);
         if let Some(output) = &inv.output {
             ops::save_job(&job, output)?;
             eprintln!("wrote {}", output.display());
         }
         let breakdown = ops::calc_job_at(&job, &inv.file)?;
-        print_result(&breakdown, inv.format, inv.color);
+        print_result(&breakdown, inv.format, inv.color, &currency_symbol());
         return Ok(());
     }
     new_job_flow(inv)
@@ -127,8 +189,8 @@ pub fn run(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
 /// stderr so `--format json` stays clean on stdout.
 fn new_job_flow(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
     let slice = ops::parse_slice(&inv.file)?;
-    let plate_selection = parse_plate(inv.plate.as_deref())?.selection();
-    let hardware = parse_hardware(&inv.hardware)?;
+    let overrides = Overrides::parse(&inv)?;
+    let currency = currency_symbol();
 
     // Parsed up front so detection can tell which slots a flag already
     // covers and stay quiet about those.
@@ -143,7 +205,14 @@ fn new_job_flow(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
     let detected = (!inv.no_detect).then(|| ops::detect_profiles(&slice));
     if let Some(detected) = &detected {
         let covered = |slot: &str| inv.filament.is_some() || mapped.contains_key(slot);
-        print_detected(&inv.file, &slice, detected, inv.printer.is_none(), &covered);
+        print_detected(
+            &inv.file,
+            &slice,
+            detected,
+            inv.printer.is_none(),
+            &covered,
+            &currency,
+        );
     }
 
     let printer = resolve_printer_choice(inv.printer, detected.as_ref(), inv.interactive)?;
@@ -181,11 +250,14 @@ fn new_job_flow(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
             printer,
             filaments,
             default_filament: inv.default_filament.map(ProfileChoice::Named),
-            quantity: inv.quantity,
-            hardware,
-            plate_selection,
+            quantity: overrides.quantity.unwrap_or(1),
+            hardware: overrides.hardware,
+            plate_selection: overrides.plate.selection(),
             labor_minutes,
             labor_rate_per_hour: labor_rate,
+            electricity_cost_per_kwh_override: overrides.electricity_cost,
+            margin_percentages_override: overrides.margins,
+            material_efficiency_factor_override: overrides.efficiency_factor,
             tier: inv.job_type.into(),
         },
         slice,
@@ -199,7 +271,7 @@ fn new_job_flow(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
         eprintln!("wrote {}", path.display());
     }
     let breakdown = ops::calc_job_data(&outcome.job, &outcome.slice)?;
-    print_result(&breakdown, inv.format, inv.color);
+    print_result(&breakdown, inv.format, inv.color, &currency);
     Ok(())
 }
 
@@ -217,6 +289,7 @@ fn print_detected(
     detected: &ops::Detected,
     want_printer: bool,
     want_slot: &dyn Fn(&str) -> bool,
+    currency: &str,
 ) {
     let mut lines: Vec<String> = Vec::new();
 
@@ -254,7 +327,7 @@ fn print_detected(
                 confidence_label(m.confidence)
             ),
             (None, Some(profile)) => format!(
-                "  {described} -> priced from the file at ${:.2}/{}",
+                "  {described} -> priced from the file at {currency}{:.2}/{}",
                 profile.price,
                 if slot.usage.ml > 0.0 { "L" } else { "kg" }
             ),
@@ -454,8 +527,10 @@ fn parse_hardware_entry(entry: &str) -> Result<HardwareItem, Box<dyn Error>> {
     if name.is_empty() {
         return Err(invalid());
     }
+    // A pasted "$0.08" or "€0.08" should still work: drop anything
+    // before the number itself.
     let cost: f64 = price
-        .trim_start_matches('$')
+        .trim_start_matches(|c: char| !c.is_ascii_digit() && c != '.' && c != '-')
         .parse()
         .map_err(|_| format!("invalid --hardware unit price {price:?} in {entry:?}"))?;
     if !cost.is_finite() || cost < 0.0 {
@@ -467,9 +542,9 @@ fn parse_hardware_entry(entry: &str) -> Result<HardwareItem, Box<dyn Error>> {
     Ok(HardwareItem::new(name, cost).with_quantity(quantity))
 }
 
-fn print_result(breakdown: &CostBreakdown, format: OutputFormat, color: bool) {
+fn print_result(breakdown: &CostBreakdown, format: OutputFormat, color: bool, currency: &str) {
     match format {
-        OutputFormat::Table => print_receipt(breakdown, color && color_allowed()),
+        OutputFormat::Table => print_receipt(breakdown, color && color_allowed(), currency),
         OutputFormat::Json => println!(
             "{}",
             serde_json::to_string_pretty(breakdown).expect("CostBreakdown always serializes")
@@ -521,7 +596,7 @@ fn print_plate_section(b: &CostBreakdown, width: usize) {
 
 /// One line per contributing filament profile. Slots sharing a profile
 /// are already collapsed into one line by the calculation.
-fn print_material_section(b: &CostBreakdown, width: usize, color: bool) {
+fn print_material_section(b: &CostBreakdown, width: usize, color: bool, cur: &str) {
     if b.material_breakdown.is_empty() {
         return;
     }
@@ -529,10 +604,18 @@ fn print_material_section(b: &CostBreakdown, width: usize, color: bool) {
     for line in &b.material_breakdown {
         let price_unit = if line.unit == "g" { "kg" } else { "L" };
         let detail = format!(
-            "{:.2}{} @ ${:.2}/{}",
+            "{:.2}{} @ {cur}{:.2}/{}",
             line.amount, line.unit, line.unit_price, price_unit
         );
-        print_item_line(&line.filament_name, &detail, line.cost, width, CYAN, color);
+        print_item_line(
+            &line.filament_name,
+            &detail,
+            line.cost,
+            width,
+            CYAN,
+            color,
+            cur,
+        );
     }
     println!();
 }
@@ -540,7 +623,7 @@ fn print_material_section(b: &CostBreakdown, width: usize, color: bool) {
 /// One line per hardware entry, never aggregated — each is already its
 /// own line item. For a batch the per-unit count and the multiplier are
 /// both shown, since `quantity` scaling is easy to forget.
-fn print_hardware_section(b: &CostBreakdown, width: usize, color: bool) {
+fn print_hardware_section(b: &CostBreakdown, width: usize, color: bool, cur: &str) {
     if b.hardware_breakdown.is_empty() {
         return;
     }
@@ -548,13 +631,13 @@ fn print_hardware_section(b: &CostBreakdown, width: usize, color: bool) {
     for line in &b.hardware_breakdown {
         let each = if b.quantity > 1 {
             format!(
-                "x{} @ ${:.2} × {}",
+                "x{} @ {cur}{:.2} × {}",
                 line.quantity, line.unit_cost, b.quantity
             )
         } else {
-            format!("x{} @ ${:.2}", line.quantity, line.unit_cost)
+            format!("x{} @ {cur}{:.2}", line.quantity, line.unit_cost)
         };
-        print_item_line(&line.name, &each, line.cost, width, BLUE, color);
+        print_item_line(&line.name, &each, line.cost, width, BLUE, color, cur);
     }
     println!();
 }
@@ -569,7 +652,7 @@ fn print_hardware_section(b: &CostBreakdown, width: usize, color: bool) {
 ///
 /// Every money figure is for the whole batch; the trailing summary line
 /// spells out the per-unit split when there's more than one unit.
-fn print_receipt(b: &CostBreakdown, color: bool) {
+fn print_receipt(b: &CostBreakdown, color: bool, cur: &str) {
     let batch = b.quantity > 1;
 
     let cost_labels = [
@@ -595,23 +678,23 @@ fn print_receipt(b: &CostBreakdown, color: bool) {
 
     println!();
     print_plate_section(b, width);
-    print_material_section(b, width, color);
-    print_hardware_section(b, width, color);
+    print_material_section(b, width, color, cur);
+    print_hardware_section(b, width, color, cur);
 
     if batch {
         println!("summary  ({} units)", b.quantity);
     } else {
         println!("summary");
     }
-    print_cost_line("Material", b.material_cost, width, CYAN, color);
-    print_cost_line("Printer wear", b.wear_cost, width, AMBER, color);
-    print_cost_line("Electricity", b.electricity_cost, width, AMBER, color);
-    print_cost_line("Labor", b.labor_cost, width, ROSE, color);
-    print_cost_line("Hardware", b.hardware_cost, width, BLUE, color);
+    print_cost_line("Material", b.material_cost, width, CYAN, color, cur);
+    print_cost_line("Printer wear", b.wear_cost, width, AMBER, color, cur);
+    print_cost_line("Electricity", b.electricity_cost, width, AMBER, color, cur);
+    print_cost_line("Labor", b.labor_cost, width, ROSE, color, cur);
+    print_cost_line("Hardware", b.hardware_cost, width, BLUE, color, cur);
     println!("  {}", "─".repeat(width + 3));
-    print_cost_line("TOTAL", b.total_cost, width, BOLD_GREEN, color);
+    print_cost_line("TOTAL", b.total_cost, width, BOLD_GREEN, color, cur);
     if batch {
-        print_cost_line("  per unit", b.unit_cost, width, BOLD_GREEN, color);
+        print_cost_line("  per unit", b.unit_cost, width, BOLD_GREEN, color, cur);
     }
     println!();
 
@@ -625,7 +708,7 @@ fn print_receipt(b: &CostBreakdown, color: bool) {
     let prices: Vec<String> = b
         .suggested_prices
         .iter()
-        .map(|p| format!("${:.2}", p.price))
+        .map(|p| format!("{cur}{:.2}", p.price))
         .collect();
     let header = format!("  sale price @ {} margin:", margins.join(" / "));
     println!(
@@ -640,7 +723,7 @@ fn print_receipt(b: &CostBreakdown, color: bool) {
         let per_unit: Vec<String> = b
             .suggested_prices
             .iter()
-            .map(|p| format!("${:.2}", p.unit_price))
+            .map(|p| format!("{cur}{:.2}", p.unit_price))
             .collect();
         // Padded to the header so the two rows of prices line up.
         let label = format!("{:<width$}", "  per unit:", width = header.len());
@@ -662,22 +745,30 @@ fn print_dotted(label: &str, trailing: &str, width: usize) {
     println!("  {label}{dots} {trailing}");
 }
 
-fn print_cost_line(label: &str, value: f64, width: usize, code: &str, color: bool) {
+fn print_cost_line(label: &str, value: f64, width: usize, code: &str, color: bool, cur: &str) {
     let dots = ".".repeat(width.saturating_sub(label.len()));
     println!(
         "{}",
-        paint(&format!("  {label}{dots} ${value:.2}"), code, color)
+        paint(&format!("  {label}{dots} {cur}{value:.2}"), code, color)
     );
 }
 
 /// A breakdown row: `label` + dotted leader + `detail` (the "amount @
 /// price" part) + ` = $cost`.
-fn print_item_line(label: &str, detail: &str, cost: f64, width: usize, code: &str, color: bool) {
+fn print_item_line(
+    label: &str,
+    detail: &str,
+    cost: f64,
+    width: usize,
+    code: &str,
+    color: bool,
+    cur: &str,
+) {
     let dots = ".".repeat(width.saturating_sub(label.len()));
     println!(
         "{}",
         paint(
-            &format!("  {label}{dots} {detail} = ${cost:.2}"),
+            &format!("  {label}{dots} {detail} = {cur}{cost:.2}"),
             code,
             color
         )
@@ -729,11 +820,12 @@ mod tests {
     }
 
     #[test]
-    fn units_default_to_one_and_dollar_sign_is_tolerated() {
+    fn units_default_to_one_and_currency_symbol_is_tolerated() {
         let item = parse_hardware_entry("box:$0.60").unwrap();
         assert_eq!(item.name, "box");
         assert_eq!(item.cost, 0.60);
         assert_eq!(item.quantity, 1);
+        assert_eq!(parse_hardware_entry("box:€0.60").unwrap().cost, 0.60);
     }
 
     #[test]

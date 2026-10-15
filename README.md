@@ -39,6 +39,10 @@ cargo install printcalc     # build from source
 cargo binstall printcalc    # or a prebuilt binary
 ```
 
+Shell completions and a man page come from the binary itself:
+`printcalc completions zsh`, `printcalc man`. See the
+[CLI reference](docs/reference/cli.md#printcalc-completions).
+
 ## Start here
 
 **[Pricing your first print](docs/tutorial/pricing-your-first-print.md)**

@@ -31,6 +31,10 @@ pub struct ConfigArgs {
     /// Values of 100 or more are rejected. [default: 50,60,70]
     #[arg(long = "margin", alias = "markup")]
     pub margin: Option<String>,
+    /// Symbol printed before every money amount, e.g. `€` or `"kr "`.
+    /// Display only — it doesn't convert anything. [default: $]
+    #[arg(short = 'c', long = "currency", value_name = "SYMBOL")]
+    pub currency: Option<String>,
 }
 
 pub fn run(args: ConfigArgs) -> Result<(), Box<dyn Error>> {
@@ -46,21 +50,11 @@ pub fn run(args: ConfigArgs) -> Result<(), Box<dyn Error>> {
         changed = true;
     }
     if let Some(csv) = args.margin {
-        let margins = csv
-            .split(',')
-            .map(|s| {
-                s.trim()
-                    .parse::<f64>()
-                    .map_err(|_| format!("invalid --margin entry {s:?}"))
-            })
-            .collect::<Result<Vec<f64>, _>>()?;
-        if let Some(bad) = margins.iter().find(|m| **m >= 100.0 || **m < 0.0) {
-            return Err(format!(
-                "margin of {bad}% is out of range — a margin is the share of the sale price that isn't cost, so it must be 0-99 (a 60% markup is a 37.5% margin)"
-            )
-            .into());
-        }
-        config.margin_percentages = margins;
+        config.margin_percentages = super::parse_margins(&csv)?;
+        changed = true;
+    }
+    if let Some(symbol) = args.currency {
+        config.currency_symbol = symbol;
         changed = true;
     }
 
@@ -76,4 +70,5 @@ fn print_config(c: &CostDefaults) {
     println!("electricity_cost_per_kwh: {}", c.electricity_cost_per_kwh);
     println!("labor_rate_per_hour: {}", c.labor_rate_per_hour);
     println!("margin_percentages: {:?}", c.margin_percentages);
+    println!("currency_symbol: {:?}", c.currency_symbol);
 }

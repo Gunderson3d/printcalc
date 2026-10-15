@@ -27,9 +27,6 @@ use crate::disk::{self, LibraryError};
 pub enum OpsError {
     /// A file read/write failed.
     Io(std::io::Error),
-    /// Job TOML (de)serialization failed; the message is `toml`'s own
-    /// error text.
-    Toml(String),
     /// Parsing a sliced file failed.
     Parse(ParseError),
     /// Costing a job failed.
@@ -38,17 +35,20 @@ pub enum OpsError {
     Library(LibraryError),
     /// A filesystem-free `printcalc` call failed.
     Lib(libprintcalc::Error),
+    /// The request itself doesn't make sense — re-tiering downwards,
+    /// removing a built-in preset. Nothing failed; it was never possible.
+    Invalid(String),
 }
 
 impl fmt::Display for OpsError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             OpsError::Io(e) => write!(f, "io error: {e}"),
-            OpsError::Toml(e) => write!(f, "toml error: {e}"),
             OpsError::Parse(e) => write!(f, "{e}"),
             OpsError::Calc(e) => write!(f, "{e}"),
             OpsError::Library(e) => write!(f, "{e}"),
             OpsError::Lib(e) => write!(f, "{e}"),
+            OpsError::Invalid(e) => write!(f, "{e}"),
         }
     }
 }
@@ -128,10 +128,49 @@ pub fn show_printer(name: &str) -> Result<PrinterProfile, OpsError> {
     }
 }
 
+/// Only the printer profiles actually saved in the library — no built-in
+/// presets — sorted. Tells `edit` whether it's updating a file or
+/// creating one that shadows a preset.
+pub fn list_saved_printers() -> Result<Vec<String>, OpsError> {
+    Ok(disk::list_printers()?)
+}
+
+/// Deletes a saved printer profile. A built-in preset isn't a file, so
+/// removing one is a [`LibraryError::NotFound`] with a hint saying so.
+pub fn remove_printer(name: &str) -> Result<(), OpsError> {
+    match disk::remove_printer(name) {
+        Err(LibraryError::NotFound { .. }) if builtin::printer(name).is_some() => {
+            Err(OpsError::Invalid(format!(
+                "printer {name:?} is a built-in preset, not a saved profile — nothing to remove"
+            )))
+        }
+        other => Ok(other?),
+    }
+}
+
 /// Saves a filament profile to the local library, overwriting any existing
 /// one under the same name.
 pub fn add_filament(profile: &MaterialProfile) -> Result<(), OpsError> {
     Ok(disk::save_filament(profile)?)
+}
+
+/// Only the filament profiles actually saved in the library — no built-in
+/// presets — sorted.
+pub fn list_saved_filaments() -> Result<Vec<String>, OpsError> {
+    Ok(disk::list_filaments()?)
+}
+
+/// Deletes a saved filament profile. A built-in preset isn't a file, so
+/// removing one is a [`LibraryError::NotFound`] with a hint saying so.
+pub fn remove_filament(name: &str) -> Result<(), OpsError> {
+    match disk::remove_filament(name) {
+        Err(LibraryError::NotFound { .. }) if builtin::filament(name).is_some() => {
+            Err(OpsError::Invalid(format!(
+                "filament {name:?} is a built-in preset, not a saved profile — nothing to remove"
+            )))
+        }
+        other => Ok(other?),
+    }
 }
 
 /// Every filament profile name — saved ones plus any built-in preset (see
@@ -227,6 +266,12 @@ pub struct NewJobParams {
     pub quantity: u32,
     /// Flat per-unit extras (inserts, magnets, packaging, ...).
     pub hardware: Vec<HardwareItem>,
+    /// `Some` => this job ignores the global electricity cost.
+    pub electricity_cost_per_kwh_override: Option<f64>,
+    /// `Some` => this job ignores the global margin percentages.
+    pub margin_percentages_override: Option<Vec<f64>>,
+    /// `Some` => this job ignores every material's own efficiency factor.
+    pub material_efficiency_factor_override: Option<f64>,
     /// Which shape to build the job in.
     pub tier: JobTier,
 }
@@ -359,7 +404,10 @@ pub fn new_job(params: NewJobParams, summary: SliceSummary) -> Result<NewJobOutc
         .with_default_material(default_material)
         .with_quantity(params.quantity)
         .with_labor(labor)
-        .with_hardware(params.hardware);
+        .with_hardware(params.hardware)
+        .with_electricity_cost_per_kwh_override(params.electricity_cost_per_kwh_override)
+        .with_margin_percentages_override(params.margin_percentages_override)
+        .with_material_efficiency_factor_override(params.material_efficiency_factor_override);
     Ok(NewJobOutcome {
         job,
         slice: summary,
@@ -490,7 +538,7 @@ pub fn calc_job_data(job: &Job, slice: &SliceSummary) -> Result<CostBreakdown, O
 /// library or the original sliced file at calc time.
 pub fn retier_job(job_path: &Path, tier: JobTier) -> Result<Job, OpsError> {
     if tier == JobTier::Default {
-        return Err(OpsError::Toml(
+        return Err(OpsError::Invalid(
             "can't re-tier to Default — a Full/Bundled job's linked names and original file path \
              aren't tracked anymore once embedded"
                 .to_string(),
@@ -652,6 +700,9 @@ mod tests {
                 default_filament: None,
                 quantity: 1,
                 hardware: Vec::new(),
+                electricity_cost_per_kwh_override: None,
+                margin_percentages_override: None,
+                material_efficiency_factor_override: None,
                 tier: JobTier::Default,
             },
             parse_slice(&sl1_fixture_path()).unwrap(),
@@ -694,6 +745,9 @@ mod tests {
                 default_filament: None,
                 quantity: 1,
                 hardware: Vec::new(),
+                electricity_cost_per_kwh_override: None,
+                margin_percentages_override: None,
+                material_efficiency_factor_override: None,
                 tier: JobTier::Default,
             },
             parse_slice(&sl1_fixture_path()).unwrap(),
@@ -832,6 +886,9 @@ mod tests {
                 default_filament: None,
                 quantity: 1,
                 hardware: Vec::new(),
+                electricity_cost_per_kwh_override: None,
+                margin_percentages_override: None,
+                material_efficiency_factor_override: None,
                 tier: JobTier::Default,
             },
             parse_slice(&sl1_fixture_path()).unwrap(),
@@ -863,7 +920,7 @@ mod tests {
 
         assert!(matches!(
             retier_job(&path, JobTier::Default),
-            Err(OpsError::Toml(_))
+            Err(OpsError::Invalid(_))
         ));
 
         let _ = fs::remove_file(&path);

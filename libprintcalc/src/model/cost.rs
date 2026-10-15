@@ -51,6 +51,15 @@ pub struct CostDefaults {
     /// tool prints.
     #[serde(alias = "markup_percentages")]
     pub margin_percentages: Vec<f64>,
+    /// Symbol a frontend prints before money amounts, e.g. `"$"`, `"€"`,
+    /// `"kr "`. Presentation only — nothing in the arithmetic depends on
+    /// it, and every amount is still in one unspecified currency.
+    #[serde(default = "default_currency_symbol")]
+    pub currency_symbol: String,
+}
+
+fn default_currency_symbol() -> String {
+    "$".to_string()
 }
 
 impl Default for CostDefaults {
@@ -59,6 +68,7 @@ impl Default for CostDefaults {
             electricity_cost_per_kwh: 0.14,
             labor_rate_per_hour: 15.0,
             margin_percentages: vec![50.0, 60.0, 70.0],
+            currency_symbol: default_currency_symbol(),
         }
     }
 }
@@ -85,6 +95,12 @@ impl CostDefaults {
     /// Sets the gross margin percentages to suggest prices at.
     pub fn with_margin_percentages(mut self, value: Vec<f64>) -> Self {
         self.margin_percentages = value;
+        self
+    }
+
+    /// Sets the symbol printed before money amounts.
+    pub fn with_currency_symbol(mut self, value: impl Into<String>) -> Self {
+        self.currency_symbol = value.into();
         self
     }
 }

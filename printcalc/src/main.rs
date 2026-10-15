@@ -20,7 +20,8 @@ mod ops;
 use std::fs;
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::Shell;
 
 use cli::config::ConfigArgs;
 use cli::filament::FilamentArgs;
@@ -84,9 +85,23 @@ struct Cli {
     #[arg(short = 'r', long = "labor-rate")]
     labor_rate: Option<f64>,
     /// How many units to price. Every cost and price shown is for the
-    /// whole batch, with the per-unit split alongside it.
-    #[arg(short = 'q', long, default_value_t = 1)]
-    quantity: u32,
+    /// whole batch, with the per-unit split alongside it. On a job .toml,
+    /// overrides the saved quantity. [default: 1]
+    #[arg(short = 'q', long)]
+    quantity: Option<u32>,
+    /// Electricity cost per kWh for this job, overriding the global
+    /// default set by `printcalc config --electricity-cost`.
+    #[arg(short = 'e', long = "electricity-cost")]
+    electricity_cost: Option<f64>,
+    /// Gross margin percentages to suggest prices at for this job,
+    /// comma-separated (e.g. `40,55`), overriding `printcalc config
+    /// --margin`. Margins, not markups: 60 prices at cost / 0.40.
+    #[arg(long = "margin", alias = "markup", value_name = "LIST")]
+    margin: Option<String>,
+    /// Waste allowance for this job, replacing every material's own
+    /// efficiency factor (1.2 prices 20% more material than sliced).
+    #[arg(long = "efficiency-factor")]
+    efficiency_factor: Option<f64>,
     /// Extra per-unit material or hardware cost — inserts, magnets,
     /// packaging — as `<name>:<unit price>:<number of units>`. Units are
     /// per print and default to 1; --quantity scales them. Repeatable.
@@ -125,8 +140,19 @@ enum Command {
     /// Add, list and inspect saved filament and resin profiles.
     Filament(FilamentArgs),
     /// View/set global defaults (electricity cost, labor rate, margin
-    /// percentages) — saved to `~/.config/printcalc/config.toml`.
+    /// percentages, currency symbol) — saved to
+    /// `~/.config/printcalc/config.toml`.
     Config(ConfigArgs),
+    /// Print a shell completion script to stdout. E.g. `printcalc
+    /// completions zsh > ~/.zfunc/_printcalc`.
+    Completions {
+        /// bash, elvish, fish, powershell or zsh.
+        #[arg(value_enum)]
+        shell: Shell,
+    },
+    /// Print the man page (roff) to stdout. E.g. `printcalc man >
+    /// ~/.local/share/man/man1/printcalc.1`.
+    Man,
 }
 
 fn main() {
@@ -137,6 +163,21 @@ fn main() {
         Some(Command::Printer(args)) => cli::printer::run(args.command, interactive),
         Some(Command::Filament(args)) => cli::filament::run(args.command, interactive),
         Some(Command::Config(args)) => cli::config::run(args),
+        Some(Command::Completions { shell }) => {
+            // Into a buffer first: `generate` panics on a write error, and
+            // `printcalc completions zsh | head` closing the pipe early
+            // shouldn't look like a crash.
+            let mut out = Vec::new();
+            clap_complete::generate(shell, &mut Cli::command(), "printcalc", &mut out);
+            std::io::Write::write_all(&mut std::io::stdout(), &out).map_err(|e| e.into())
+        }
+        Some(Command::Man) => {
+            let mut out = Vec::new();
+            clap_mangen::Man::new(Cli::command())
+                .render(&mut out)
+                .and_then(|()| std::io::Write::write_all(&mut std::io::stdout(), &out))
+                .map_err(|e| e.into())
+        }
         None => match cli.file {
             Some(file) => {
                 let full_file:PathBuf = fs::canonicalize(file).expect("unable to get input file path");
@@ -154,6 +195,9 @@ fn main() {
                 labor_minutes: cli.labor_minutes,
                 labor_rate: cli.labor_rate,
                 quantity: cli.quantity,
+                electricity_cost: cli.electricity_cost,
+                margin: cli.margin,
+                efficiency_factor: cli.efficiency_factor,
                 hardware: cli.hardware,
                 no_detect: cli.no_detect,
                 format: cli.format,

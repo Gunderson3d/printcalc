@@ -151,6 +151,19 @@ fn load_profile<T: DeserializeOwned>(
     Ok(profile)
 }
 
+fn remove_profile(dir: &Path, kind: &'static str, name: &str) -> Result<(), LibraryError> {
+    fs::remove_file(dir.join(format!("{name}.toml"))).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            LibraryError::NotFound {
+                kind,
+                name: name.to_string(),
+            }
+        } else {
+            LibraryError::Io(e)
+        }
+    })
+}
+
 fn list_profiles(dir: &Path) -> Result<Vec<String>, LibraryError> {
     let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
@@ -184,6 +197,12 @@ pub fn list_printers() -> Result<Vec<String>, LibraryError> {
     list_profiles(&printers_dir())
 }
 
+/// Deletes a saved printer profile. [`LibraryError::NotFound`] if there
+/// isn't one — built-in presets aren't files and can't be removed.
+pub fn remove_printer(name: &str) -> Result<(), LibraryError> {
+    remove_profile(&printers_dir(), "printer", name)
+}
+
 /// Saves `profile` to `filaments_dir()/<name>.toml`, overwriting any
 /// existing file under that name.
 pub fn save_filament(profile: &MaterialProfile) -> Result<(), LibraryError> {
@@ -199,6 +218,12 @@ pub fn load_filament(name: &str) -> Result<MaterialProfile, LibraryError> {
 /// `filaments_dir()` doesn't exist yet.
 pub fn list_filaments() -> Result<Vec<String>, LibraryError> {
     list_profiles(&filaments_dir())
+}
+
+/// Deletes a saved filament profile. [`LibraryError::NotFound`] if there
+/// isn't one — built-in presets aren't files and can't be removed.
+pub fn remove_filament(name: &str) -> Result<(), LibraryError> {
+    remove_profile(&filaments_dir(), "filament", name)
 }
 
 #[cfg(test)]
@@ -224,6 +249,13 @@ mod tests {
         let loaded: MaterialProfile = load_profile(&dir, "filament", "pla-black").unwrap();
         assert_eq!(loaded, profile);
         assert_eq!(list_profiles(&dir).unwrap(), vec!["pla-black".to_string()]);
+
+        remove_profile(&dir, "filament", "pla-black").unwrap();
+        assert!(list_profiles(&dir).unwrap().is_empty());
+        assert!(matches!(
+            remove_profile(&dir, "filament", "pla-black"),
+            Err(LibraryError::NotFound { .. })
+        ));
 
         let _ = fs::remove_dir_all(&dir);
     }

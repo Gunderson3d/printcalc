@@ -104,6 +104,7 @@ own.
 electricity_cost_per_kwh = 0.14
 labor_rate_per_hour = 15.0
 margin_percentages = [50.0, 60.0, 70.0]
+currency_symbol = "$"
 ```
 
 | Key | Type | Default |
@@ -111,6 +112,10 @@ margin_percentages = [50.0, 60.0, 70.0]
 | `electricity_cost_per_kwh` | float | `0.14` |
 | `labor_rate_per_hour` | float | `15.0` |
 | `margin_percentages` | float array | `[50.0, 60.0, 70.0]` |
+| `currency_symbol` | string | `"$"` |
+
+`currency_symbol` is printed before every amount and changes nothing
+else: all money is still in one unspecified currency.
 
 `margin_percentages` are gross margins, not markups — see
 [margins are not markups](../explanation/margins-not-markups.md). Files
