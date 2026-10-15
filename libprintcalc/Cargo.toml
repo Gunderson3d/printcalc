@@ -5,9 +5,9 @@ edition = "2024"
 description = "Library for calculating 3D print job costs (material, print time, printer wear, electricity, labor, hardware) from sliced-file output."
 readme = "README.md"
 license = "Apache-2.0"
-repository = "https://github.com/Kaifungamedev/printcalc"
-homepage = "https://github.com/Kaifungamedev/printcalc"
-keywords = ["3d-printing", "gcode", "3mf", "cost", "slicer"]
+repository = "https://github.com/Gunderson3d/printcalc"
+homepage = "https://github.com/Gunderson3d/printcalc"
+keywords = ["3d-printing", "gcode", "3mf", "cost"]
 categories = ["parser-implementations"]
 
 [lib]
