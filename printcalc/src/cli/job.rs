@@ -20,6 +20,7 @@ use clap::ValueEnum;
 use libprintcalc::formats::slice_summary::{SliceSummary, SlotUsage};
 use libprintcalc::model::cost::CostBreakdown;
 use libprintcalc::model::filament::MaterialProfile;
+use libprintcalc::model::job::HardwareItem;
 use libprintcalc::model::printer::PrinterProfile;
 
 use crate::interactive;
@@ -74,6 +75,8 @@ pub struct JobInvocation {
     pub labor_rate: Option<f64>,
     /// How many units to price. All costs and prices are for the batch.
     pub quantity: u32,
+    /// `--hardware` entries, unparsed: `name:unit price[:units]`.
+    pub hardware: Vec<String>,
     /// Skip reading the printer/filament the sliced file names, and ask
     /// (or fail) as if it said nothing.
     pub no_detect: bool,
@@ -100,14 +103,16 @@ pub fn run(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
         // pricing just one plate out of a Bundled job saved with "all",
         // without needing the original sliced file).
         let plate = parse_plate(inv.plate.as_deref())?;
+        let hardware = parse_hardware(&inv.hardware)?;
         if let Some(output) = &inv.output {
             let mut job = ops::load_job(&inv.file)?;
             plate.apply(&mut job);
+            job.hardware.extend(hardware);
             ops::save_job(&job, output)?;
             println!("wrote {}", output.display());
             return Ok(());
         }
-        let breakdown = ops::calc_job(&inv.file, plate)?;
+        let breakdown = ops::calc_job(&inv.file, plate, hardware)?;
         print_result(&breakdown, inv.format);
         return Ok(());
     }
@@ -121,6 +126,7 @@ pub fn run(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
 fn new_job_flow(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
     let slice = ops::parse_slice(&inv.file)?;
     let plate_selection = parse_plate(inv.plate.as_deref())?.selection();
+    let hardware = parse_hardware(&inv.hardware)?;
 
     // Parsed up front so detection can tell which slots a flag already
     // covers and stay quiet about those.
@@ -174,6 +180,7 @@ fn new_job_flow(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
             filaments,
             default_filament: inv.default_filament.map(ProfileChoice::Named),
             quantity: inv.quantity,
+            hardware,
             plate_selection,
             labor_minutes,
             labor_rate_per_hour: labor_rate,
@@ -426,6 +433,46 @@ fn parse_filament_map(
         .collect()
 }
 
+/// `--hardware` entries: `name:unit price[:units]`, one [`HardwareItem`]
+/// each. Split from the right so a name may itself contain colons
+/// (`M3x5:brass:0.08:4` is a name of `M3x5:brass`). Units default to 1,
+/// matching the job file's default.
+fn parse_hardware(entries: &[String]) -> Result<Vec<HardwareItem>, Box<dyn Error>> {
+    entries.iter().map(|e| parse_hardware_entry(e)).collect()
+}
+
+fn parse_hardware_entry(entry: &str) -> Result<HardwareItem, Box<dyn Error>> {
+    let invalid = || -> Box<dyn Error> {
+        format!("invalid --hardware entry {entry:?}, expected name:unit-price[:units]").into()
+    };
+    // rsplitn yields right-to-left: [units?, price, name].
+    let mut parts: Vec<&str> = entry.rsplitn(3, ':').map(str::trim).collect();
+    parts.reverse();
+    let (name, price, units) = match parts.as_slice() {
+        [name, price] => (*name, *price, "1"),
+        [name, price, units] => (*name, *price, *units),
+        _ => return Err(invalid()),
+    };
+    if name.is_empty() {
+        return Err(invalid());
+    }
+    let cost: f64 = price
+        .trim_start_matches('$')
+        .parse()
+        .map_err(|_| format!("invalid --hardware unit price {price:?} in {entry:?}"))?;
+    if !cost.is_finite() || cost < 0.0 {
+        return Err(format!("invalid --hardware unit price {price:?} in {entry:?}").into());
+    }
+    let quantity: u32 = units.parse().ok().filter(|q| *q > 0).ok_or_else(|| {
+        format!("invalid --hardware units {units:?} in {entry:?} (whole number, at least 1)")
+    })?;
+    Ok(HardwareItem {
+        name: name.to_string(),
+        cost,
+        quantity,
+    })
+}
+
 fn print_result(breakdown: &CostBreakdown, format: OutputFormat) {
     match format {
         OutputFormat::Table => print_receipt(breakdown),
@@ -667,5 +714,59 @@ fn paint(text: &str, code: &str, enabled: bool) -> String {
         format!("{code}{text}{RESET}")
     } else {
         text.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_name_price_units() {
+        let item = parse_hardware_entry("M3 brass insert:0.08:4").unwrap();
+        assert_eq!(item.name, "M3 brass insert");
+        assert_eq!(item.cost, 0.08);
+        assert_eq!(item.quantity, 4);
+    }
+
+    #[test]
+    fn units_default_to_one_and_dollar_sign_is_tolerated() {
+        let item = parse_hardware_entry("box:$0.60").unwrap();
+        assert_eq!(item.name, "box");
+        assert_eq!(item.cost, 0.60);
+        assert_eq!(item.quantity, 1);
+    }
+
+    #[test]
+    fn name_may_contain_colons() {
+        let item = parse_hardware_entry("magnet 6:3:0.12:2").unwrap();
+        assert_eq!(item.name, "magnet 6:3");
+        assert_eq!(item.cost, 0.12);
+        assert_eq!(item.quantity, 2);
+    }
+
+    #[test]
+    fn rejects_malformed_entries() {
+        for bad in [
+            "box",
+            ":0.5",
+            "box:abc",
+            "box:-1",
+            "box:0.5:0",
+            "box:0.5:1.5",
+            "box:0.5:x",
+        ] {
+            assert!(
+                parse_hardware_entry(bad).is_err(),
+                "{bad:?} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn parses_many() {
+        let items = parse_hardware(&["a:1".into(), "b:2:3".into()]).unwrap();
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[1].quantity, 3);
     }
 }

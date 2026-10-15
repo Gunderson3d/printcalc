@@ -15,7 +15,7 @@ use libprintcalc::formats::slice_summary::SliceSummary;
 use libprintcalc::formats::{self, ParseError};
 use libprintcalc::model::cost::{self, CalcError, CostBreakdown, CostDefaults};
 use libprintcalc::model::filament::MaterialProfile;
-use libprintcalc::model::job::{Job, JobSource, LaborCost, ProfileRef};
+use libprintcalc::model::job::{HardwareItem, Job, JobSource, LaborCost, ProfileRef};
 use libprintcalc::model::printer::PrinterProfile;
 
 use crate::disk::{self, LibraryError};
@@ -225,6 +225,8 @@ pub struct NewJobParams {
     pub default_filament: Option<ProfileChoice<MaterialProfile>>,
     /// How many units the job covers; `1` for a one-off.
     pub quantity: u32,
+    /// Flat per-unit extras (inserts, magnets, packaging, ...).
+    pub hardware: Vec<HardwareItem>,
     /// Which shape to build the job in.
     pub tier: JobTier,
 }
@@ -363,7 +365,7 @@ pub fn new_job(params: NewJobParams, summary: SliceSummary) -> Result<NewJobOutc
             rate_per_hour: params.labor_rate_per_hour,
             minutes: params.labor_minutes,
         },
-        hardware: Vec::new(),
+        hardware: params.hardware,
         margin_percentages_override: None,
     };
     Ok(NewJobOutcome {
@@ -439,9 +441,18 @@ impl PlateOverride {
 /// the file on disk is untouched. That lets a job saved with
 /// `plate = "all"` (a Bundled job whose original sliced file is long gone,
 /// say) still be priced one plate at a time on demand.
-pub fn calc_job(job_path: &Path, plate: PlateOverride) -> Result<CostBreakdown, OpsError> {
+///
+/// `hardware` is appended to whatever the job file already lists, so
+/// `--hardware` on the command line adds to a saved job rather than
+/// replacing its entries. The job on disk is untouched.
+pub fn calc_job(
+    job_path: &Path,
+    plate: PlateOverride,
+    hardware: Vec<HardwareItem>,
+) -> Result<CostBreakdown, OpsError> {
     let mut job = load_job(job_path)?;
     plate.apply(&mut job);
+    job.hardware.extend(hardware);
     let slice = resolve_slice_summary(&job, job_path)?;
     calc_job_data(&job, &slice)
 }
@@ -581,7 +592,7 @@ mod tests {
     use super::*;
     use libprintcalc::formats::slice_summary::{FilamentUsage, PlateSummary, SourceFormat};
     use libprintcalc::model::filament::MaterialKind;
-    use libprintcalc::model::job::{HardwareItem, SINGLE_MATERIAL_SLOT};
+    use libprintcalc::model::job::SINGLE_MATERIAL_SLOT;
     use libprintcalc::model::printer::{PrinterKind, WearProfile};
 
     fn sl1_fixture_path() -> PathBuf {
@@ -607,7 +618,7 @@ mod tests {
         // Tolerances here are 1e-4: reported costs are rounded to four
         // decimal places (see `cost::COST_DP`), so they can't match an
         // exact product to more than that.
-        let breakdown = calc_job(&path, PlateOverride::Keep).unwrap();
+        let breakdown = calc_job(&path, PlateOverride::Keep, Vec::new()).unwrap();
         assert!((breakdown.material_cost - 0.2654538075).abs() < 1e-4);
         assert_eq!(breakdown.material_breakdown.len(), 1);
         assert_eq!(
@@ -619,12 +630,12 @@ mod tests {
         assert_eq!(breakdown.hardware_breakdown.len(), 2);
 
         // --plate 1 override: just the first plate's material.
-        let plate1 = calc_job(&path, PlateOverride::Only(1)).unwrap();
+        let plate1 = calc_job(&path, PlateOverride::Only(1), Vec::new()).unwrap();
         assert!((plate1.material_cost - 0.136426395).abs() < 1e-4);
 
         // --plate 3 doesn't exist (only plates 1 and 2 are in this fixture).
         assert!(matches!(
-            calc_job(&path, PlateOverride::Only(3)).unwrap_err(),
+            calc_job(&path, PlateOverride::Only(3), Vec::new()).unwrap_err(),
             OpsError::Calc(CalcError::PlateNotFound(3))
         ));
     }
@@ -645,6 +656,7 @@ mod tests {
                 labor_rate_per_hour: None,
                 default_filament: None,
                 quantity: 1,
+                hardware: Vec::new(),
                 tier: JobTier::Default,
             },
             parse_slice(&sl1_fixture_path()).unwrap(),
@@ -686,6 +698,7 @@ mod tests {
                 labor_rate_per_hour: None,
                 default_filament: None,
                 quantity: 1,
+                hardware: Vec::new(),
                 tier: JobTier::Default,
             },
             parse_slice(&sl1_fixture_path()).unwrap(),
@@ -772,7 +785,7 @@ mod tests {
 
         let path = temp_job_path("bundled");
         save_job(&job, &path).unwrap();
-        let breakdown = calc_job(&path, PlateOverride::Keep).unwrap();
+        let breakdown = calc_job(&path, PlateOverride::Keep, Vec::new()).unwrap();
         let _ = fs::remove_file(&path);
 
         // 10ml * 1.0 factor * ($40/1000) = $0.40
@@ -860,6 +873,7 @@ mod tests {
                 labor_rate_per_hour: None,
                 default_filament: None,
                 quantity: 1,
+                hardware: Vec::new(),
                 tier: JobTier::Default,
             },
             parse_slice(&sl1_fixture_path()).unwrap(),
@@ -868,7 +882,7 @@ mod tests {
 
         let path = temp_job_path("default-tier");
         save_job(&outcome.job, &path).unwrap();
-        let breakdown = calc_job(&path, PlateOverride::Keep).unwrap();
+        let breakdown = calc_job(&path, PlateOverride::Keep, Vec::new()).unwrap();
 
         // Re-tiering: Default -> Bundled embeds both the profiles and the
         // parsed slice summary; the retiered job needs neither the
@@ -886,7 +900,7 @@ mod tests {
         unsafe {
             std::env::remove_var("PRINTCALC_CONFIG_DIR");
         }
-        let bundled_breakdown = calc_job(&bundled_path, PlateOverride::Keep).unwrap(); // ...still calcs fine
+        let bundled_breakdown = calc_job(&bundled_path, PlateOverride::Keep, Vec::new()).unwrap(); // ...still calcs fine
         assert_eq!(bundled_breakdown.material_cost, breakdown.material_cost);
 
         assert!(matches!(

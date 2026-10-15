@@ -86,6 +86,17 @@ struct Cli {
     /// whole batch, with the per-unit split alongside it.
     #[arg(short = 'q', long, default_value_t = 1)]
     quantity: u32,
+    /// Extra per-unit material or hardware cost — inserts, magnets,
+    /// packaging — as `<name>:<unit price>:<number of units>`. Units are
+    /// per print and default to 1; --quantity scales them. Repeatable.
+    /// On a job .toml, adds to the entries the file already lists.
+    #[arg(
+        short = 'H',
+        long = "hardware",
+        visible_alias = "extra",
+        value_name = "NAME:PRICE[:UNITS]"
+    )]
+    hardware: Vec<String>,
     /// Ignore the printer and filament the sliced file names, and ask (or
     /// fail) as if it said nothing.
     #[arg(long = "no-detect")]
@@ -136,6 +147,7 @@ fn main() {
                 labor_minutes: cli.labor_minutes,
                 labor_rate: cli.labor_rate,
                 quantity: cli.quantity,
+                hardware: cli.hardware,
                 no_detect: cli.no_detect,
                 format: cli.format,
                 interactive,

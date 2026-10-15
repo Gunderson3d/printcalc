@@ -46,14 +46,20 @@ printcalc widget.gcode -m 6 -q 10 ...
 
 ## Add per-unit hardware
 
-Extras are counted per unit too, and scale the same way. There is no CLI
-flag; add them to a saved job file:
+Extras are counted per unit too, and scale the same way. Pass each one as
+`--hardware <name>:<unit price>:<number of units>` (`-H` for short):
 
 ```sh
-printcalc widget.gcode -p mini -f pla-grey -m 6 -q 10 -o batch.toml
+printcalc widget.gcode -p mini -f pla-grey -m 6 -q 10 \
+  -H "M3 brass insert:0.08:4" -H "box:0.60"
 ```
 
-Then edit `batch.toml`:
+Four inserts and one box **per print**, times ten prints. The number of
+units is optional and defaults to 1; the job's `quantity` scales it.
+`--extra` is an alias for `--hardware`.
+
+With `-o`, the entries are saved into the job file, where you can edit
+them later:
 
 ```toml
 [[hardware]]
@@ -66,12 +72,12 @@ name = "box"
 cost = 0.60
 ```
 
-```sh
-printcalc batch.toml
-```
+`--hardware` on a saved job adds to what the file already lists — costed
+only, or written back if `-o` is given too:
 
-Four inserts and one box **per print**, times ten prints. The `quantity`
-in a hardware entry is per unit; the job's `quantity` scales it.
+```sh
+printcalc batch.toml -H "sticker:0.05:2"
+```
 
 ## Change the quantity later
 

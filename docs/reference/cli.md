@@ -43,6 +43,7 @@ fallback. See [job files](job-file.md#materials).
 | `-m, --labor-minutes <N>` | prompt | Hands-on time **per unit** — setup, removal, finishing. |
 | `-r, --labor-rate <N>` | global config (`15.0`) | Labor rate per hour for this job. |
 | `-q, --quantity <N>` | `1` | Units in the batch. Scales every cost. |
+| `-H, --hardware <NAME:PRICE[:UNITS]>` | — | Extra per-unit cost — inserts, magnets, packaging. `M3 insert:0.08:4` is four at $0.08 each **per print**; units default to `1`. Repeatable; `--extra` is an alias. On a job `.toml`, adds to the file's existing entries. |
 | `-P, --plate <P>` | `all` | `all` or a plate number. Ignored with a warning for single-plate formats. |
 
 ### Output
