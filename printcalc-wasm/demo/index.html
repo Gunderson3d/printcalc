@@ -8,22 +8,59 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+  // Apply a saved theme before first paint; with none saved, the OS preference wins.
+  try { const t = localStorage.getItem('printcalc.theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}
+</script>
+<style>
+  /* Color tokens as RGB channels so Tailwind's opacity modifiers keep working. */
+  :root {
+    color-scheme: light;
+    --page: 237 240 238; --surface: 255 255 255; --ink: 24 33 43; --muted: 98 113 128; --rule: 213 219 216;
+    --act: 29 111 95; --act-deep: 21 84 71; --act-wash: 228 240 236; --act-on: 255 255 255;
+    --material: 14 116 144; --machine: 180 83 9; --labor: 190 18 60; --hardware: 29 78 216;
+    --bad: 180 35 24; --bad-wash: 251 234 231;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: 17 21 24; --surface: 27 33 38; --ink: 226 232 230; --muted: 148 161 173; --rule: 50 59 66;
+      --act: 76 194 167; --act-deep: 110 211 187; --act-wash: 22 48 42; --act-on: 10 22 19;
+      --material: 56 189 216; --machine: 233 162 59; --labor: 251 113 133; --hardware: 125 162 247;
+      --bad: 249 112 102; --bad-wash: 58 26 23;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: 17 21 24; --surface: 27 33 38; --ink: 226 232 230; --muted: 148 161 173; --rule: 50 59 66;
+    --act: 76 194 167; --act-deep: 110 211 187; --act-wash: 22 48 42; --act-on: 10 22 19;
+    --material: 56 189 216; --machine: 233 162 59; --labor: 251 113 133; --hardware: 125 162 247;
+    --bad: 249 112 102; --bad-wash: 58 26 23;
+  }
+  body { background: rgb(var(--page)); }
+</style>
 <script src="https://cdn.tailwindcss.com/3.4.17"></script>
 <script>
   tailwind.config = {
     theme: {
       extend: {
         colors: {
-          page: '#EDF0EE',
-          ink: '#18212B',
-          muted: '#627180',
-          rule: '#D5DBD8',
-          act: { DEFAULT: '#1D6F5F', deep: '#155447', wash: '#E4F0EC' },
-          material: '#0E7490',
-          machine: '#B45309',
-          labor: '#BE123C',
-          hardware: '#1D4ED8',
-          bad: { DEFAULT: '#B42318', wash: '#FBEAE7' },
+          page: 'rgb(var(--page) / <alpha-value>)',
+          surface: 'rgb(var(--surface) / <alpha-value>)',
+          ink: 'rgb(var(--ink) / <alpha-value>)',
+          muted: 'rgb(var(--muted) / <alpha-value>)',
+          rule: 'rgb(var(--rule) / <alpha-value>)',
+          act: {
+            DEFAULT: 'rgb(var(--act) / <alpha-value>)',
+            deep: 'rgb(var(--act-deep) / <alpha-value>)',
+            wash: 'rgb(var(--act-wash) / <alpha-value>)',
+            on: 'rgb(var(--act-on) / <alpha-value>)',
+          },
+          material: 'rgb(var(--material) / <alpha-value>)',
+          machine: 'rgb(var(--machine) / <alpha-value>)',
+          labor: 'rgb(var(--labor) / <alpha-value>)',
+          hardware: 'rgb(var(--hardware) / <alpha-value>)',
+          bad: { DEFAULT: 'rgb(var(--bad) / <alpha-value>)', wash: 'rgb(var(--bad-wash) / <alpha-value>)' },
         },
         fontFamily: {
           sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
@@ -37,12 +74,12 @@
   /* Dotted leaders, as the CLI prints them. */
   .leader { flex: 1 1 auto; min-width: 1.5ch; border-bottom: 2px dotted currentColor; opacity: .45; margin: 0 .6ch .4em; }
   .tnum { font-variant-numeric: tabular-nums; }
-  .field { @apply w-full rounded-md border border-rule bg-white px-2.5 py-1.5 text-sm text-ink tnum focus:outline-none focus:ring-2 focus:ring-act focus:border-act; }
+  .field { @apply w-full rounded-md border border-rule bg-surface px-2.5 py-1.5 text-sm text-ink tnum focus:outline-none focus:ring-2 focus:ring-act focus:border-act; }
   .num { @apply field text-right font-mono; }
   .lbl { @apply block text-sm text-muted mb-1; }
   .btn { @apply inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-act focus-visible:ring-offset-2 focus-visible:ring-offset-page; }
-  .btn-primary { @apply btn bg-act text-white hover:bg-act-deep; }
-  .btn-quiet { @apply btn border border-rule bg-white text-ink hover:bg-page; }
+  .btn-primary { @apply btn bg-act text-act-on hover:bg-act-deep; }
+  .btn-quiet { @apply btn border border-rule bg-surface text-ink hover:bg-page; }
   .btn-ghost { @apply btn text-muted hover:text-ink; }
   .section { @apply pt-6 border-t border-rule; }
   .section:first-child { @apply pt-0 border-t-0; }
@@ -61,9 +98,14 @@
     <h1 class="font-mono font-semibold text-xl tracking-tight">printcalc</h1>
     <span id="version" class="font-mono text-xs text-muted"></span>
   </div>
-  <nav class="text-sm text-muted flex gap-4">
+  <nav class="text-sm text-muted flex items-center gap-4">
     <a class="hover:text-ink" href="https://github.com/Kaifungamedev/printcalc">Source</a>
     <a class="hover:text-ink" href="https://github.com/Kaifungamedev/printcalc/blob/main/docs/reference/pricing.md">How the math works</a>
+    <button id="theme-toggle" class="hover:text-ink rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-act" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
+      </svg>
+    </button>
   </nav>
 </header>
 
@@ -73,7 +115,7 @@
   <div class="lg:col-span-7">
     <section class="section" aria-labelledby="h-file">
       <h2 id="h-file" class="sr-only">Sliced file</h2>
-      <div id="drop" class="rounded-lg border border-rule bg-white p-5 flex flex-wrap items-center gap-4"
+      <div id="drop" class="rounded-lg border border-rule bg-surface p-5 flex flex-wrap items-center gap-4"
            role="group" aria-label="Choose a sliced file">
         <div class="flex-1 min-w-[14rem]">
           <p id="file-name" class="font-medium">Drop a sliced file here</p>
@@ -93,8 +135,8 @@
   </div>
 
   <!-- Receipt: second on phones, right column spanning both rows on desktop -->
-  <aside class="lg:col-span-5 lg:col-start-8 lg:row-span-2 lg:row-start-1">
-    <div class="lg:sticky lg:top-6 rounded-lg bg-white border border-rule p-5 font-mono text-sm tnum">
+  <aside class="lg:col-span-5 lg:col-start-8 lg:row-span-2 lg:row-start-1 lg:self-stretch">
+    <div class="lg:sticky lg:top-6 rounded-lg bg-surface border border-rule p-5 font-mono text-sm tnum">
       <div id="receipt-empty" class="text-muted py-10 text-center">Drop a sliced file to see its cost.</div>
       <div id="receipt" hidden></div>
       <div id="receipt-actions" hidden class="mt-5 pt-4 border-t border-rule flex flex-wrap gap-2 font-sans">
@@ -202,6 +244,16 @@
   Same arithmetic as the <code class="font-mono">printcalc</code> command line, compiled to WebAssembly. Sale prices are gross margins, not markups: 60% means cost ÷ 0.40.
 </footer>
 
+<script>
+  document.getElementById('theme-toggle').addEventListener('click', () => {
+    const root = document.documentElement;
+    const dark = root.dataset.theme
+      ? root.dataset.theme === 'dark'
+      : matchMedia('(prefers-color-scheme: dark)').matches;
+    root.dataset.theme = dark ? 'light' : 'dark';
+    try { localStorage.setItem('printcalc.theme', root.dataset.theme); } catch {}
+  });
+</script>
 <script type="module" src="./app.js"></script>
 </body>
 </html>
