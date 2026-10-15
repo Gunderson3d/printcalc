@@ -43,8 +43,10 @@ right thing to hand to a colleague who doesn't share your profiles. It
 still needs the sliced file.
 
 **`bundled`** is self-contained: no sliced file, no profile library, no
-config. This is the archive format. It is also the only thing that works
-in the browser, where there is no filesystem to resolve anything against.
+config. This is the archive format. It is also the only tier the browser
+build can cost on its own: with no filesystem there, a `default` or
+`full` job has to be handed its sliced file alongside, and `ref =` names
+resolve against the built-in presets only.
 
 ## Tiers only go up
 
@@ -88,7 +90,8 @@ A rule of thumb:
 
 - Still negotiating? `default`.
 - Sending it to someone? `full`.
-- Filing it, or feeding it to the browser build? `bundled`.
+- Filing it, or opening it in the browser without the sliced file to
+  hand? `bundled`.
 
 When in doubt, keep the `default`-tier job as the working copy and
 produce a `bundled` copy at the moment you quote. The working copy stays

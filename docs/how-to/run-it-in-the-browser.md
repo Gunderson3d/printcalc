@@ -8,12 +8,19 @@ exposes everything that works without a filesystem.
 ## Use the hosted tool
 
 <https://gunderson3d.github.io/printcalc/> is `printcalc-wasm/demo/`
-published by the Pages workflow on every push to `main` that touches the
-library or the wasm crate. Drop a sliced file, or open a bundled job
-`.toml` saved by the CLI. It offers the same built-in presets as the
-CLI, lets you edit any number, and prints the same receipt. Rates,
-margins and the currency symbol are kept in your browser's local
-storage. Nothing is uploaded.
+published by the Pages workflow on every release (or by hand from the
+Actions tab). Drop a sliced file, or open a job `.toml` saved by the
+CLI. It offers the same built-in presets as the CLI, lets you edit any
+number, and prints the same receipt. Rates, margins and the currency
+symbol are kept in your browser's local storage. Nothing is uploaded.
+
+A `bundled` job opens on its own. A `default` or `full` job names its
+sliced file by path, which the browser can't read, so the page asks for
+that file: drop the `.toml` and the sliced file together, or the job
+first and the file after. Linked printer and filament names (`ref =`)
+resolve against the built-in presets only; a name from your own profile
+library needs `--retier full` first so the numbers travel with the job.
+See [job tiers](../explanation/job-tiers.md).
 
 `?load=<url>` opens a file at startup; the site ships three under
 `examples/`, e.g. `?load=examples/cube.gcode`.
@@ -106,7 +113,10 @@ job.material = { "1": { profile: JSON.parse(parse_material(filamentToml)) } };
 There is no filesystem in the browser: no profile library to resolve a
 `ref =` against, and no sliced file to re-read a `path =` from. Anything
 costed here needs **embedded profiles** (or built-in preset names) and an
-**embedded slice summary**.
+**embedded slice summary**. A page that accepts `default`/`full` jobs
+does what the demo does: read the basename off `source.path`, ask the
+user for that file, parse it with `parse_slice_bytes`, and swap the
+summary in for the path before calling `calculate`.
 
 `calc_job(job_toml)` is a one-shot convenience for a complete job in TOML
 form, and requires a bundled-tier job for exactly that reason. See

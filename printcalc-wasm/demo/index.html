@@ -119,15 +119,22 @@
            role="group" aria-label="Choose a sliced file">
         <div class="flex-1 min-w-[14rem]">
           <p id="file-name" class="font-medium">Drop a sliced file here</p>
-          <p id="file-meta" class="text-sm text-muted mt-0.5">.gcode, .bgcode, .gcode.3mf, .sl1 or .sl1s. Nothing leaves your browser.</p>
+          <p id="file-meta" class="text-sm text-muted mt-0.5">.gcode, .bgcode, .gcode.3mf, .sl1 or .sl1s, or a job .toml plus the sliced file it names. Nothing leaves your browser.</p>
         </div>
         <div class="flex gap-2">
           <label class="btn-primary cursor-pointer">Choose file
-            <input id="file-input" type="file" class="sr-only" accept=".gcode,.bgcode,.3mf,.sl1,.sl1s">
+            <input id="file-input" type="file" class="sr-only" multiple accept=".gcode,.bgcode,.3mf,.sl1,.sl1s,.toml">
           </label>
-          <label class="btn-quiet cursor-pointer" title="A bundled-tier job saved by the CLI">Open job .toml
-            <input id="job-input" type="file" class="sr-only" accept=".toml">
+          <label class="btn-quiet cursor-pointer" title="A job saved by the CLI. Bundled jobs open on their own; default and full ones ask for the sliced file they name.">Open job .toml
+            <input id="job-input" type="file" class="sr-only" multiple accept=".toml,.gcode,.bgcode,.3mf,.sl1,.sl1s">
           </label>
+        </div>
+      </div>
+      <div id="pending" class="mt-3 rounded-md bg-act-wash text-ink text-sm px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-2" hidden role="status">
+        <p class="flex-1 min-w-[14rem]"><code id="pending-job" class="font-mono"></code> names <code id="pending-wants" class="font-mono font-semibold"></code> but doesn't carry its slice data. Drop that sliced file here to cost the job.</p>
+        <div class="flex gap-2">
+          <button id="pending-choose" class="btn-primary" type="button">Choose sliced file</button>
+          <button id="pending-cancel" class="btn-ghost" type="button">Cancel</button>
         </div>
       </div>
       <div id="error" class="mt-3 rounded-md bg-bad-wash text-bad text-sm px-3 py-2" hidden role="alert"></div>

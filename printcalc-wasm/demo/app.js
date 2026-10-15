@@ -23,6 +23,7 @@ export const DEFAULTS = {
 };
 
 const STORAGE_KEY = 'printcalc.defaults.v1';
+const FILE_HINT = '.gcode, .bgcode, .gcode.3mf, .sl1 or .sl1s, or a job .toml plus the sliced file it names. Nothing leaves your browser.';
 
 // ---------------------------------------------------------------- pure
 
@@ -106,6 +107,48 @@ export function buildJob(state) {
   if (state.margins != null) job.margin_percentages_override = state.margins;
   if (state.efficiency != null) job.material_efficiency_factor_override = state.efficiency;
   return job;
+}
+
+/**
+ * Basename of the sliced file a default/full-tier job expects, or null
+ * when the job carries its slice data (bundled tier).
+ */
+export function jobSliceName(job) {
+  const path = job?.source?.path;
+  if (typeof path !== 'string' || path === '') return null;
+  return path.split(/[\\/]/).pop();
+}
+
+/** Case-insensitive basename comparison, so "Cube.GCODE" satisfies "cube.gcode". */
+export function sameFileName(a, b) {
+  const base = (n) => String(n ?? '').split(/[\\/]/).pop().toLowerCase();
+  return base(a) !== '' && base(a) === base(b);
+}
+
+/**
+ * A copy of `job` with `slice` embedded as its source, keeping the plate
+ * selection. Turns a default/full-tier job into what `calculate` accepts
+ * once the user has supplied the sliced file it named.
+ */
+export function attachSlice(job, slice) {
+  const source = { summary: slice };
+  if (typeof job?.source?.plate === 'number') source.plate = job.source.plate;
+  return { ...job, source };
+}
+
+/**
+ * The profile behind a ProfileRef: embedded ones come straight back; a
+ * linked name is looked up in `presets` (the built-in list), which is the
+ * only library a browser has. Throws when the name isn't a preset.
+ */
+export function resolveRef(ref, presets, what) {
+  if (ref == null) return null;
+  if (ref.profile) return ref.profile;
+  const found = presets.find((p) => p.name === ref.ref);
+  if (!found) {
+    throw new Error(`${what} links "${ref.ref}", which isn't a built-in preset. There's no profile library in the browser; save the job with --retier full so the profile is embedded.`);
+  }
+  return { ...found };
 }
 
 export function formatDuration(seconds) {
@@ -196,6 +239,9 @@ async function main() {
     slice: null,
     slots: [],          // from auto_job or slotsFromSummary
     detected: null,     // { printer, slots } from auto_job, or null when loaded from a job
+    sliceName: null,    // filename the current slice came from
+    loaded: null,       // { job, slice, wants } when state came from a job .toml
+    pendingJob: null,   // { job, filename, wants }: a path-tier job waiting for its sliced file
     process: 'fdm',
     plate: null,
     printer: null,      // PrinterProfile or null
@@ -236,6 +282,8 @@ async function main() {
     const auto = JSON.parse(auto_job(filename.replace(/\.[^.]+$/, ''), JSON.stringify(slice), null, null, 1.5));
     state.name = filename.replace(/\.(gcode\.3mf|[^.]+)$/, '');
     state.slice = slice;
+    state.sliceName = filename;
+    state.loaded = null;
     state.process = processOf(slice);
     state.detected = { printer: auto.printer, slots: auto.slots };
     state.slots = auto.slots.map((s) => s.usage);
@@ -252,28 +300,56 @@ async function main() {
     recalc();
   };
 
+  // A job .toml either carries its slice data (bundled tier) or names a
+  // sliced file by path (default/full). The browser can't read that
+  // path, so the job waits in `state.pendingJob` until the user supplies
+  // the file: dropped alongside, dropped afterwards, or already open.
   const loadJobToml = async (text, filename) => {
     const job = JSON.parse(parse_job(text));
-    if (!job.source?.summary) {
-      throw new Error('This job refers to a sliced file by path. Save it with `--retier bundled` so the slice data travels with it.');
+    const wants = jobSliceName(job);
+    if (!wants) {
+      applyJob(job, filename, null);
+      return;
     }
-    if (!job.printer?.profile) {
-      throw new Error('This job links its printer by name. Save it with `--retier full` or `bundled` so the profile is embedded.');
+    state.pendingJob = { job, filename, wants };
+    if (state.slice && sameFileName(state.sliceName, wants)) {
+      applyJob(attachSlice(job, state.slice), filename, state.sliceName);
+      return;
     }
+    $('file-name').textContent = filename;
+    $('file-meta').textContent = `waiting for ${wants}`;
+    renderPending();
+  };
+
+  // The sliced file a pending job asked for. Any sliced file is accepted
+  // (the job may have been written on another machine, under another
+  // name); a mismatch is noted in "What the file says" rather than refused.
+  const attachSliceFile = (bytes, filename) => {
+    const pending = state.pendingJob;
+    const slice = JSON.parse(parse_slice_bytes(bytes, filename));
+    applyJob(attachSlice(pending.job, slice), pending.filename, filename);
+  };
+
+  /** Loads a job whose source is embedded into the UI state. */
+  function applyJob(job, filename, sliceName) {
+    const printer = resolveRef(job.printer, presets.printers, 'The printer');
     const mats = job.materials ?? (job.material ? { 1: job.material } : {});
+    const wants = state.pendingJob?.filename === filename ? state.pendingJob.wants : null;
+    state.pendingJob = null;
     state.name = job.name;
     state.slice = job.source.summary;
+    state.sliceName = sliceName;
+    state.loaded = { job: filename, slice: sliceName, wants };
     state.process = processOf(state.slice);
     state.detected = null;
     state.slots = slotsFromSummary(state.slice);
     state.plate = typeof job.source.plate === 'number' ? job.source.plate : null;
-    state.printer = job.printer.profile;
+    state.printer = printer;
     state.printerCustom = !presets.printers.some((p) => p.name === state.printer.name);
     state.materials = {};
     for (const s of state.slots) {
       const ref = mats[s.slot_id] ?? job.default_material ?? null;
-      if (ref && !ref.profile) throw new Error(`Material for slot ${s.slot_id} links "${ref.ref}" by name; embed it with --retier full.`);
-      state.materials[s.slot_id] = ref?.profile ?? null;
+      state.materials[s.slot_id] = resolveRef(ref, presets.filaments, `The material for slot ${s.slot_id}`);
     }
     state.quantity = job.quantity ?? 1;
     state.laborMinutes = job.labor?.minutes ?? 0;
@@ -282,31 +358,56 @@ async function main() {
     state.efficiency = job.material_efficiency_factor_override ?? null;
     if (job.electricity_cost_per_kwh_override != null) $('electricity').value = job.electricity_cost_per_kwh_override;
     if (job.margin_percentages_override) $('margins').value = job.margin_percentages_override.join(', ');
-    $('file-name').textContent = filename;
+    $('file-name').textContent = sliceName ? `${filename} + ${sliceName}` : filename;
+    renderPending();
     renderSetup();
     recalc();
-  };
+  }
 
-  const handleFile = async (file) => {
-    if (!file) return;
+  function renderPending() {
+    const p = state.pendingJob;
+    $('pending').hidden = !p;
+    if (!p) return;
+    $('pending-job').textContent = p.filename;
+    $('pending-wants').textContent = p.wants;
+  }
+  $('pending-choose').addEventListener('click', () => $('file-input').click());
+  $('pending-cancel').addEventListener('click', () => {
+    state.pendingJob = null;
+    renderPending();
+    $('file-name').textContent = state.sliceName ?? state.loaded?.job ?? 'Drop a sliced file here';
+    if (!state.slice) $('file-meta').textContent = FILE_HINT;
+    else renderSetup();
+  });
+
+  const isToml = (file) => /\.toml$/i.test(file.name);
+
+  // Several files at once are fine: the job .toml goes first so a sliced
+  // file dropped with it lands in that job instead of starting a new one.
+  const handleFiles = async (list) => {
+    const files = [...(list ?? [])].filter(Boolean);
+    if (files.length === 0) return;
+    files.sort((a, b) => Number(isToml(b)) - Number(isToml(a)));
     showError('');
     try {
-      if (/\.toml$/i.test(file.name)) {
-        await loadJobToml(await file.text(), file.name);
-      } else {
-        await loadSliceBytes(new Uint8Array(await file.arrayBuffer()), file.name);
+      for (const file of files) {
+        if (isToml(file)) await loadJobToml(await file.text(), file.name);
+        else if (state.pendingJob) attachSliceFile(new Uint8Array(await file.arrayBuffer()), file.name);
+        else await loadSliceBytes(new Uint8Array(await file.arrayBuffer()), file.name);
       }
     } catch (e) {
       showError(String(e?.message ?? e));
     }
   };
+  const handleFile = (file) => handleFiles(file ? [file] : []);
 
-  $('file-input').addEventListener('change', (ev) => handleFile(ev.target.files[0]));
-  $('job-input').addEventListener('change', (ev) => handleFile(ev.target.files[0]));
+  for (const id of ['file-input', 'job-input']) {
+    $(id).addEventListener('change', (ev) => { handleFiles(ev.target.files); ev.target.value = ''; });
+  }
   const drop = $('drop');
   for (const evt of ['dragenter', 'dragover']) drop.addEventListener(evt, (e) => { e.preventDefault(); drop.classList.add('ring-2', 'ring-act'); });
   for (const evt of ['dragleave', 'drop']) drop.addEventListener(evt, (e) => { e.preventDefault(); drop.classList.remove('ring-2', 'ring-act'); });
-  drop.addEventListener('drop', (e) => handleFile(e.dataTransfer?.files?.[0]));
+  drop.addEventListener('drop', (e) => handleFiles(e.dataTransfer?.files));
 
   // ---- setup rendering (structure changes only on file load)
   function renderSetup() {
@@ -338,7 +439,11 @@ async function main() {
       }
     } else {
       if (model) row('Printer', model);
-      row('Loaded from', 'a saved job; profiles come from the file');
+      const from = state.loaded ?? {};
+      row('Loaded from', from.slice ? `job ${from.job} with ${from.slice}` : `job ${from.job}; slice data is bundled in it`);
+      if (from.wants && from.slice && !sameFileName(from.slice, from.wants)) {
+        row('Note', `the job named ${from.wants}; costing ${from.slice} instead`);
+      }
     }
 
     // Printer select
