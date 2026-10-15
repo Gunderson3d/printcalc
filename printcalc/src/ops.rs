@@ -496,7 +496,9 @@ pub fn calc_job(
 ) -> Result<CostBreakdown, OpsError> {
     let mut job = load_job(job_path)?;
     plate.apply(&mut job);
-    job.hardware.extend(hardware);
+    for item in hardware {
+        job.add_hardware(item);
+    }
     calc_job_at(&job, job_path)
 }
 

@@ -176,7 +176,10 @@ pub struct Job {
     pub electricity_cost_per_kwh_override: Option<f64>,
     /// Labor time and (optionally) rate for this job.
     pub labor: LaborCost,
-    /// Extra flat costs beyond material/wear/electricity/labor.
+    /// Extra flat costs beyond material/wear/electricity/labor. Names are
+    /// unique within a job: [`Job::add_hardware`] replaces an entry with
+    /// the same name rather than adding a second line for it. Assigning
+    /// the field directly bypasses that.
     pub hardware: Vec<HardwareItem>,
     /// Gross margin percentages to suggest sale prices at. `None` => fall
     /// back to the global config default (`[50.0, 60.0, 70.0]`). See
@@ -271,9 +274,14 @@ impl Job {
         self
     }
 
-    /// Replaces the hardware list. See also [`Job::add_hardware`].
+    /// Replaces the hardware list. Duplicate names collapse to the last
+    /// one given, in first-seen order — the same rule as
+    /// [`Job::add_hardware`].
     pub fn with_hardware(mut self, hardware: Vec<HardwareItem>) -> Self {
-        self.hardware = hardware;
+        self.hardware.clear();
+        for item in hardware {
+            self.add_hardware(item);
+        }
         self
     }
 
@@ -301,10 +309,15 @@ impl Job {
         self.material.insert(slot.into(), material);
     }
 
-    /// Appends a flat per-piece extra cost (inserts, magnets, ...) to this
-    /// job's hardware list.
+    /// Adds a flat per-piece extra cost (inserts, magnets, ...) to this
+    /// job's hardware list — or, if an entry with the same name already
+    /// exists, replaces it in place. Names are compared exactly. Keeps a
+    /// re-quote from piling up a second "magnets" line next to the first.
     pub fn add_hardware(&mut self, item: HardwareItem) {
-        self.hardware.push(item);
+        match self.hardware.iter_mut().find(|h| h.name == item.name) {
+            Some(existing) => *existing = item,
+            None => self.hardware.push(item),
+        }
     }
 
     /// Serializes this job to the job TOML [`crate::parse_job`] reads back,
@@ -766,6 +779,36 @@ minutes = 10.0
             JobSource::from(summary.clone()),
             JobSource::Embedded(summary)
         );
+    }
+
+    #[test]
+    fn add_hardware_replaces_an_entry_with_the_same_name() {
+        let mut job = Job::new(
+            "upsert",
+            PathBuf::from("x.gcode"),
+            ProfileRef::Linked {
+                name: "p".to_string(),
+            },
+        )
+        .with_hardware(vec![
+            HardwareItem::new("magnets", 0.10).with_quantity(4),
+            HardwareItem::new("box", 0.60),
+            // A duplicate inside the initial list collapses too.
+            HardwareItem::new("magnets", 0.12).with_quantity(6),
+        ]);
+        assert_eq!(job.hardware.len(), 2);
+        assert_eq!(job.hardware[0].name, "magnets");
+        assert_eq!(job.hardware[0].quantity, 6);
+
+        job.add_hardware(HardwareItem::new("magnets", 0.08).with_quantity(5));
+        job.add_hardware(HardwareItem::new("sticker", 0.05));
+        let names: Vec<&str> = job.hardware.iter().map(|h| h.name.as_str()).collect();
+        assert_eq!(names, ["magnets", "box", "sticker"]);
+        assert_eq!(job.hardware[0].quantity, 5);
+        assert!((job.hardware[0].cost - 0.08).abs() < f64::EPSILON);
+        // Exact match only: case differs, so it's a different item.
+        job.add_hardware(HardwareItem::new("Magnets", 1.0));
+        assert_eq!(job.hardware.len(), 4);
     }
 
     #[test]

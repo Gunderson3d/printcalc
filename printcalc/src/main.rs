@@ -105,7 +105,8 @@ struct Cli {
     /// Extra per-unit material or hardware cost — inserts, magnets,
     /// packaging — as `<name>:<unit price>:<number of units>`. Units are
     /// per print and default to 1; --quantity scales them. Repeatable.
-    /// On a job .toml, adds to the entries the file already lists.
+    /// On a job .toml, replaces the saved entry with the same name, or
+    /// adds a new one.
     #[arg(
         short = 'H',
         long = "hardware",

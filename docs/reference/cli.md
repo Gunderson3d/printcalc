@@ -33,7 +33,8 @@ prompt (or an error under `--no-input`).
 
 On a job `.toml`, `-q`, `-P`, `-e`, `--margin`, `--efficiency-factor`
 and `--hardware` override the saved values for that run, and `-o` writes
-the result back. `--hardware` appends rather than replaces.
+the result back. `--hardware` matches saved entries by name: the same
+name replaces that entry, a new name adds one.
 
 `--filament` expands per slot when the job is saved, so the mapping is
 visible in the file. `--default-filament` stays a single job-level
@@ -50,7 +51,7 @@ fallback. See [job files](job-file.md#materials).
 | `-e, --electricity-cost <N>` | global config (`0.14`) | Electricity cost per kWh for this job. |
 | `--margin <LIST>` | global config (`50,60,70`) | Margin percentages for this job, comma-separated. Margins, not markups. |
 | `--efficiency-factor <N>` | each profile's own | Waste allowance for this job, replacing every material's own factor. |
-| `-H, --hardware <NAME:PRICE[:UNITS]>` | — | Extra per-unit cost — inserts, magnets, packaging. `M3 insert:0.08:4` is four at $0.08 each **per print**; units default to `1`. Repeatable; `--extra` is an alias. On a job `.toml`, adds to the file's existing entries. |
+| `-H, --hardware <NAME:PRICE[:UNITS]>` | — | Extra per-unit cost — inserts, magnets, packaging. `M3 insert:0.08:4` is four at $0.08 each **per print**; units default to `1`. Repeatable; `--extra` is an alias. On a job `.toml`, replaces the saved entry with the same name, or adds a new one. |
 | `-P, --plate <P>` | `all` | `all` or a plate number. Ignored with a warning for single-plate formats. |
 
 ### Output

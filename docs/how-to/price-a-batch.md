@@ -72,11 +72,13 @@ name = "box"
 cost = 0.60
 ```
 
-`--hardware` on a saved job adds to what the file already lists — costed
-only, or written back if `-o` is given too:
+`--hardware` on a saved job goes by name: a name the file already has
+replaces that entry, a new name adds one. Costed only, or written back
+if `-o` is given too:
 
 ```sh
-printcalc batch.toml -H "sticker:0.05:2"
+printcalc batch.toml -H "sticker:0.05:2"          # adds a line
+printcalc batch.toml -H "M3 brass insert:0.07:4"  # updates the price
 ```
 
 ## Change the quantity later

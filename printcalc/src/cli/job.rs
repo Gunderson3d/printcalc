@@ -126,11 +126,15 @@ impl Overrides {
         })
     }
 
-    /// Applies to a loaded job. Hardware is appended, everything else
-    /// replaces the saved value only when the flag was given.
+    /// Applies to a loaded job. Hardware is added by name — a saved entry
+    /// with the same name is replaced, anything else is appended — and
+    /// every other field replaces the saved value only when its flag was
+    /// given.
     fn apply(self, job: &mut Job) {
         self.plate.apply(job);
-        job.hardware.extend(self.hardware);
+        for item in self.hardware {
+            job.add_hardware(item);
+        }
         if let Some(q) = self.quantity {
             job.quantity = q;
         }

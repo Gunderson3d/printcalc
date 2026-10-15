@@ -193,6 +193,11 @@ cost = 0.60
 `quantity` is the count **per unit** — four inserts per print stays four
 however large the batch, and the job's `quantity` scales it.
 
+`name` is unique within a job. `printcalc ... -H` with a name that's
+already present replaces that entry instead of adding a second line. A
+hand-edited file with two entries of the same name still costs both; the
+uniqueness is enforced on the way in, not on load.
+
 `printcalc ... -H "M3 brass insert:0.08:4"` writes the same entry from the
 command line; see [`--hardware`](cli.md#job-inputs).
 
