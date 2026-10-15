@@ -4,8 +4,9 @@ How `printcalc` turns a sliced file into a landed cost and a suggested
 sale price. This describes what the code does; it is the authority for
 the arithmetic.
 
-All money is in a single unspecified currency. The CLI prints `$`; no
-conversion happens anywhere.
+All money is in a single unspecified currency. The CLI prints the
+`currency_symbol` from the global config (`$` by default) in front of
+each amount; no conversion happens anywhere.
 
 ## Where the numbers come from
 
@@ -135,7 +136,9 @@ hardware_cost = Σ cost
 four however large the batch, and `Job::quantity` scales it.
 
 Unlike material, hardware lines are never aggregated — each entry is
-already its own line item.
+already its own line item. Names are unique within a job when entries
+are added through the CLI or `Job::add_hardware`; a hand-edited file
+with two entries of one name still sums both.
 
 ## 3. Total and suggested price
 

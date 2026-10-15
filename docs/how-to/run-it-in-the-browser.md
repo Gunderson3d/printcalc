@@ -112,6 +112,15 @@ form, and requires a bundled-tier job for exactly that reason. See
 All arguments and returns are JSON strings except `parse_slice_bytes`,
 which takes raw bytes.
 
+`hardware` for `new_job` is an array of `{ name, cost, quantity? }`.
+Names are unique within a job: a later entry with the same name replaces
+the earlier one.
+
+`defaults` for `calculate` mirrors `config.toml` —
+`electricity_cost_per_kwh`, `labor_rate_per_hour`, `margin_percentages`
+and `currency_symbol`. The symbol is display-only and nothing in the
+returned numbers depends on it, so a page prints its own.
+
 The `disk` helpers from `libprintcalc` have no counterpart here.
 
 ## See also

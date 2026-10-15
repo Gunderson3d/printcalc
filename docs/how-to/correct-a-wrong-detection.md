@@ -69,6 +69,7 @@ branded preset:
 
 ```sh
 printcalc filament add --name pla-silk --price 29.0 --vendor "Polymaker"
+printcalc filament edit pla-silk --vendor "Polymaker"    # if it already exists
 ```
 
 ## Why a good-looking match still says "guess"

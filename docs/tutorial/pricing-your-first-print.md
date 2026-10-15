@@ -103,6 +103,9 @@ Check what was saved:
 printcalc printer show mini
 ```
 
+Got a number wrong? `printcalc printer edit mini --purchase-price 449`
+changes just that field.
+
 ## Step 4: Tell it about your filament
 
 ```console
@@ -190,14 +193,16 @@ wrote cube-quote.toml
 ...
 ```
 
-The same summary prints as before, after the `wrote` line. Open `cube-quote.toml` and you'll see plain, editable TOML. Change
-`quantity` to `10`, then re-cost it by passing the job file back:
+The same summary prints as before, after the `wrote` line. Re-cost it
+for ten units by passing the job file back with a new quantity:
 
 ```sh
-printcalc cube-quote.toml
+printcalc cube-quote.toml -q 10
 ```
 
-The price updates. You never touched the sliced file — the job refers to
+The price updates. Open `cube-quote.toml` and you'll see plain, editable
+TOML — `quantity`, labor, hardware and overrides are all there to change
+by hand too. You never touched the sliced file — the job refers to
 it by path and re-reads it each time.
 
 ## What you have now

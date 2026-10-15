@@ -9,6 +9,7 @@ a changed profile.
 printcalc widget.gcode -p mini -f pla-grey -m 12 -o widget.toml
 ```
 
+The cost prints as usual; the `wrote widget.toml` note goes to stderr.
 Re-cost it any time:
 
 ```sh
@@ -91,7 +92,21 @@ the original names and paths are gone once resolved away. See
 
 ## Edit a saved job
 
-Job files are plain TOML and meant to be edited. Common changes:
+The most common changes have flags. On a job file they apply to that run
+only, or are written back with `-o`:
+
+```sh
+printcalc widget.toml -q 25                       # new quantity
+printcalc widget.toml -H "magnet:0.25:2"          # add or update a hardware line
+printcalc widget.toml --margin 45,60 -e 0.48      # margins, electricity
+printcalc widget.toml -P 2                        # one plate
+printcalc widget.toml -q 25 -o widget.toml        # ...and save
+```
+
+`--hardware` goes by name: a name already in the file replaces that
+entry, a new name adds one.
+
+For anything else, job files are plain TOML and meant to be edited:
 
 ```toml
 quantity = 25

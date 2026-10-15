@@ -5,7 +5,8 @@ printcalc [OPTIONS] [FILE] [COMMAND]
 ```
 
 Every command accepts `--no-input`, which never prompts and fails instead
-if something required wasn't given as a flag. Use it in scripts.
+if something required wasn't given as a flag. Use it in scripts. Every
+command also accepts `--no-color`.
 
 ## printcalc \<file\>
 

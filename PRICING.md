@@ -115,7 +115,8 @@ means dividing those minutes by `Q` before entering them.
 X = Σ over entries j:  x[j] · n[j] · Q
 ```
 
-`n[j]` is the count per unit; `Q` scales it to the batch.
+`n[j]` is the count per unit; `Q` scales it to the batch. Entries are keyed
+by name, so each name appears once per job.
 
 ---
 

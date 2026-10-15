@@ -73,7 +73,10 @@ solely for auto-detection (`matching.rs`), which refuses to guess below a
 confidence threshold rather than price a wrong profile.
 
 **Jobs store inputs, never results.** A `Job` is file + profile refs +
-quantity + extras; `calculate_cost` runs fresh each time. Profile refs are
+quantity + extras; `calculate_cost` runs fresh each time. Hardware names
+are unique per job: `Job::add_hardware` upserts by exact name, and the CLI
+routes `--hardware` through it, so never `push`/`extend` `job.hardware`
+directly. Profile refs are
 `Linked { name }` (resolved against the saved library, then `builtin.rs`
 presets) or `Embedded`. Job tiers only go up (`default` → `full` → `bundled`);
 re-tiering downward is an error because names and paths are lost once

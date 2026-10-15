@@ -121,6 +121,10 @@ crate. Build values with their constructors and `with_*` setters
 directly still works. This is what lets a minor release add a field
 without breaking your build.
 
+`Job::add_hardware` and `Job::with_hardware` keep hardware names unique:
+an item whose name is already present replaces that entry in place.
+Pushing onto `job.hardware` directly bypasses this.
+
 The public enums `MaterialKind`, `PrinterKind`, `JobTier` and
 `SourceFormat` are `#[non_exhaustive]` too, so a `match` on one needs a
 wildcard arm. `ProfileRef` and `JobSource` are deliberately not: a new
