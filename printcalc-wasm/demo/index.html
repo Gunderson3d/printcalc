@@ -2,83 +2,206 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>printcalc-wasm demo</title>
-<style>
-  body { font-family: system-ui, sans-serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
-  h1 { font-size: 1.3rem; }
-  section { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
-  h2 { font-size: 1rem; margin-top: 0; }
-  pre { background: #f5f5f5; padding: 0.75rem; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; }
-  .error { color: #b00020; }
-  button { padding: 0.4rem 0.8rem; }
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>printcalc</title>
+<meta name="description" content="Cost a 3D print from its sliced file, in the browser. Material, machine time, electricity, labor and hardware, with suggested sale prices.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          page: '#EDF0EE',
+          ink: '#18212B',
+          muted: '#627180',
+          rule: '#D5DBD8',
+          act: { DEFAULT: '#1D6F5F', deep: '#155447', wash: '#E4F0EC' },
+          material: '#0E7490',
+          machine: '#B45309',
+          labor: '#BE123C',
+          hardware: '#1D4ED8',
+          bad: { DEFAULT: '#B42318', wash: '#FBEAE7' },
+        },
+        fontFamily: {
+          sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+          mono: ['"IBM Plex Mono"', 'ui-monospace', 'Menlo', 'monospace'],
+        },
+      },
+    },
+  };
+</script>
+<style type="text/tailwindcss">
+  /* Dotted leaders, as the CLI prints them. */
+  .leader { flex: 1 1 auto; min-width: 1.5ch; border-bottom: 2px dotted currentColor; opacity: .45; margin: 0 .6ch .4em; }
+  .tnum { font-variant-numeric: tabular-nums; }
+  .field { @apply w-full rounded-md border border-rule bg-white px-2.5 py-1.5 text-sm text-ink tnum focus:outline-none focus:ring-2 focus:ring-act focus:border-act; }
+  .num { @apply field text-right font-mono; }
+  .lbl { @apply block text-sm text-muted mb-1; }
+  .btn { @apply inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-act focus-visible:ring-offset-2 focus-visible:ring-offset-page; }
+  .btn-primary { @apply btn bg-act text-white hover:bg-act-deep; }
+  .btn-quiet { @apply btn border border-rule bg-white text-ink hover:bg-page; }
+  .btn-ghost { @apply btn text-muted hover:text-ink; }
+  .section { @apply pt-6 border-t border-rule; }
+  .section:first-child { @apply pt-0 border-t-0; }
+  details > summary { list-style: none; cursor: pointer; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary .chev { transition: transform .15s; }
+  details[open] > summary .chev { transform: rotate(90deg); }
+  [hidden] { display: none !important; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
-<body>
-<h1>printcalc-wasm demo</h1>
-<p>
-  Mirrors <code>printcalc</code>'s root API in the browser:
-  <code>parse_slice_bytes</code>, <code>parse_job</code>, <code>new_job</code>,
-  <code>calculate</code>, plus the <code>calc_job</code> one-shot (TOML in,
-  breakdown out) and the built-in preset listings. Nothing here touches a
-  filesystem or a profile library — everything is bytes/strings in, JSON out.
-</p>
+<body class="bg-page text-ink font-sans antialiased min-h-screen">
 
-<section>
-  <h2>1. Parse a sliced file</h2>
-  <p>Pick any supported sliced file (.gcode, .bgcode, .gcode.3mf, .sl1, .sl1s).</p>
-  <input type="file" id="slice-input">
-  <pre id="slice-output">(pick a file)</pre>
-</section>
+<header class="max-w-6xl mx-auto px-4 pt-6 pb-4 flex items-baseline justify-between gap-4">
+  <div class="flex items-baseline gap-3">
+    <h1 class="font-mono font-semibold text-xl tracking-tight">printcalc</h1>
+    <span id="version" class="font-mono text-xs text-muted"></span>
+  </div>
+  <nav class="text-sm text-muted flex gap-4">
+    <a class="hover:text-ink" href="https://github.com/Kaifungamedev/printcalc">Source</a>
+    <a class="hover:text-ink" href="https://github.com/Kaifungamedev/printcalc/blob/main/docs/reference/pricing.md">How the math works</a>
+  </nav>
+</header>
 
-<section>
-  <h2>2. Calc a Bundled-tier job</h2>
-  <p>
-    Must be Bundled tier (embedded profiles + embedded slice summary) — there's no
-    filesystem here to resolve a <code>ref =</code> or re-parse a <code>path =</code>
-    against. <code>Testfiles/bundled-job-example.toml</code> in the repo root is a
-    ready-made example.
-  </p>
-  <input type="file" id="job-input" accept=".toml">
-  <pre id="job-output">(pick a job .toml)</pre>
-</section>
+<main class="max-w-6xl mx-auto px-4 pb-16 grid gap-8 lg:grid-cols-12 lg:grid-rows-[auto_1fr] lg:items-start">
 
-<script type="module">
-  import init, { parse_slice_bytes, calc_job, printcalc_wasm_version } from './pkg/printcalc_wasm.js';
+  <!-- File picker: first on every screen size -->
+  <div class="lg:col-span-7">
+    <section class="section" aria-labelledby="h-file">
+      <h2 id="h-file" class="sr-only">Sliced file</h2>
+      <div id="drop" class="rounded-lg border border-rule bg-white p-5 flex flex-wrap items-center gap-4"
+           role="group" aria-label="Choose a sliced file">
+        <div class="flex-1 min-w-[14rem]">
+          <p id="file-name" class="font-medium">Drop a sliced file here</p>
+          <p id="file-meta" class="text-sm text-muted mt-0.5">.gcode, .bgcode, .gcode.3mf, .sl1 or .sl1s. Nothing leaves your browser.</p>
+        </div>
+        <div class="flex gap-2">
+          <label class="btn-primary cursor-pointer">Choose file
+            <input id="file-input" type="file" class="sr-only" accept=".gcode,.bgcode,.3mf,.sl1,.sl1s">
+          </label>
+          <label class="btn-quiet cursor-pointer" title="A bundled-tier job saved by the CLI">Open job .toml
+            <input id="job-input" type="file" class="sr-only" accept=".toml">
+          </label>
+        </div>
+      </div>
+      <div id="error" class="mt-3 rounded-md bg-bad-wash text-bad text-sm px-3 py-2" hidden role="alert"></div>
+    </section>
+  </div>
 
-  await init();
-  document.title = `printcalc-wasm demo (v${printcalc_wasm_version()})`;
+  <!-- Receipt: second on phones, right column spanning both rows on desktop -->
+  <aside class="lg:col-span-5 lg:col-start-8 lg:row-span-2 lg:row-start-1">
+    <div class="lg:sticky lg:top-6 rounded-lg bg-white border border-rule p-5 font-mono text-sm tnum">
+      <div id="receipt-empty" class="text-muted py-10 text-center">Drop a sliced file to see its cost.</div>
+      <div id="receipt" hidden></div>
+      <div id="receipt-actions" hidden class="mt-5 pt-4 border-t border-rule flex flex-wrap gap-2 font-sans">
+        <button id="dl-breakdown" class="btn-quiet" type="button">Download breakdown</button>
+        <button id="dl-job" class="btn-quiet" type="button">Download job</button>
+      </div>
+    </div>
+  </aside>
 
-  const sliceInput = document.getElementById('slice-input');
-  const sliceOutput = document.getElementById('slice-output');
-  sliceInput.addEventListener('change', async () => {
-    const file = sliceInput.files[0];
-    if (!file) return;
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    try {
-      const summary = JSON.parse(parse_slice_bytes(bytes, file.name));
-      sliceOutput.textContent = JSON.stringify(summary, null, 2);
-      sliceOutput.classList.remove('error');
-    } catch (e) {
-      sliceOutput.textContent = String(e);
-      sliceOutput.classList.add('error');
-    }
-  });
+  <!-- Everything else about the job -->
+  <div class="lg:col-span-7 lg:col-start-1">
+    <div id="setup" hidden class="space-y-6">
 
-  const jobInput = document.getElementById('job-input');
-  const jobOutput = document.getElementById('job-output');
-  jobInput.addEventListener('change', async () => {
-    const file = jobInput.files[0];
-    if (!file) return;
-    const text = await file.text();
-    try {
-      const breakdown = JSON.parse(calc_job(text));
-      jobOutput.textContent = JSON.stringify(breakdown, null, 2);
-      jobOutput.classList.remove('error');
-    } catch (e) {
-      jobOutput.textContent = String(e);
-      jobOutput.classList.add('error');
-    }
-  });
-</script>
+      <section class="section !pt-6 !border-t" aria-labelledby="h-detected">
+        <h2 id="h-detected" class="text-base font-semibold">What the file says</h2>
+        <dl id="detected" class="mt-3 grid sm:grid-cols-[auto_1fr] gap-x-6 gap-y-1 sm:gap-y-1.5 text-sm [&>dd]:mb-1.5 sm:[&>dd]:mb-0"></dl>
+      </section>
+
+      <section class="section" aria-labelledby="h-printer">
+        <div class="flex items-baseline justify-between gap-4">
+          <h2 id="h-printer" class="text-base font-semibold">Printer</h2>
+          <span id="printer-note" class="text-sm text-muted"></span>
+        </div>
+        <div class="mt-3 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+          <div>
+            <label class="lbl" for="printer-select">Profile</label>
+            <select id="printer-select" class="field"></select>
+          </div>
+          <button id="printer-toggle" class="btn-quiet" type="button" aria-expanded="false" aria-controls="printer-fields">Edit numbers</button>
+        </div>
+        <div id="printer-fields" hidden class="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+      </section>
+
+      <section class="section" aria-labelledby="h-materials">
+        <h2 id="h-materials" class="text-base font-semibold">Materials</h2>
+        <p class="text-sm text-muted mt-1">One per slot the file used. Prices per kg, or per liter for resin.</p>
+        <div id="slots" class="mt-3 space-y-4"></div>
+      </section>
+
+      <section class="section" aria-labelledby="h-batch">
+        <h2 id="h-batch" class="text-base font-semibold">Batch and labor</h2>
+        <div class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <label class="lbl" for="quantity">Units</label>
+            <input id="quantity" class="num" type="number" min="1" step="1" value="1">
+          </div>
+          <div>
+            <label class="lbl" for="labor-minutes">Minutes per unit</label>
+            <input id="labor-minutes" class="num" type="number" min="0" step="1" value="0">
+          </div>
+          <div>
+            <label class="lbl" for="labor-rate">Labor rate /h</label>
+            <input id="labor-rate" class="num" type="number" min="0" step="0.5" placeholder="default">
+          </div>
+          <div id="plate-wrap" hidden>
+            <label class="lbl" for="plate">Plate</label>
+            <select id="plate" class="field"></select>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="h-hardware">
+        <div class="flex items-baseline justify-between gap-4">
+          <h2 id="h-hardware" class="text-base font-semibold">Hardware per unit</h2>
+          <button id="hardware-add" class="btn-ghost" type="button">+ Add item</button>
+        </div>
+        <p class="text-sm text-muted mt-1">Inserts, magnets, packaging. Counts are per print; units scale them.</p>
+        <div id="hardware" class="mt-3 space-y-2"></div>
+      </section>
+
+      <section class="section" aria-labelledby="h-rates">
+        <h2 id="h-rates" class="text-base font-semibold">Rates and margins</h2>
+        <p class="text-sm text-muted mt-1">Saved in this browser and used for every file you open.</p>
+        <div class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <label class="lbl" for="electricity">Electricity /kWh</label>
+            <input id="electricity" class="num" type="number" min="0" step="0.01">
+          </div>
+          <div>
+            <label class="lbl" for="default-labor-rate">Default labor /h</label>
+            <input id="default-labor-rate" class="num" type="number" min="0" step="0.5">
+          </div>
+          <div>
+            <label class="lbl" for="margins">Margins %</label>
+            <input id="margins" class="field font-mono" type="text" inputmode="decimal" placeholder="50, 60, 70">
+          </div>
+          <div>
+            <label class="lbl" for="currency">Currency symbol</label>
+            <input id="currency" class="field font-mono" type="text" maxlength="4">
+          </div>
+          <div class="col-span-2">
+            <label class="lbl" for="efficiency">Waste allowance for this job</label>
+            <input id="efficiency" class="num" type="number" min="1" step="0.05" placeholder="each material's own">
+          </div>
+        </div>
+        <p class="text-xs text-muted mt-3">Built-in presets are US dollar list prices and a price read from the file is in your slicer's currency. The symbol only labels; nothing is converted.</p>
+      </section>
+
+    </div>
+  </div>
+
+</main>
+
+<footer class="max-w-6xl mx-auto px-4 pb-10 text-xs text-muted">
+  Same arithmetic as the <code class="font-mono">printcalc</code> command line, compiled to WebAssembly. Sale prices are gross margins, not markups: 60% means cost ÷ 0.40.
+</footer>
+
+<script type="module" src="./app.js"></script>
 </body>
 </html>

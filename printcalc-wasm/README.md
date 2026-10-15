@@ -68,7 +68,7 @@ job.material = { "1": { profile: JSON.parse(parse_material(filamentToml)) } };
 
 ```sh
 rustup target add wasm32-unknown-unknown          # once
-cargo install wasm-bindgen-cli --version 0.2.126  # match Cargo.lock
+cargo install wasm-bindgen-cli --version 0.2.128  # match Cargo.lock
 
 cargo build -p printcalc-wasm --target wasm32-unknown-unknown --release
 wasm-bindgen ../target/wasm32-unknown-unknown/release/printcalc_wasm.wasm \

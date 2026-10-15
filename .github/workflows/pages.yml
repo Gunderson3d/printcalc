@@ -1,0 +1,83 @@
+name: Pages
+
+# Builds printcalc-wasm, generates the wasm-bindgen glue into the demo
+# folder, and publishes `printcalc-wasm/demo/` as the GitHub Pages site.
+# One-time setup: Settings -> Pages -> Source: "GitHub Actions".
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "libprintcalc/**"
+      - "printcalc-wasm/**"
+      - "Cargo.lock"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      # The CLI must match the `wasm-bindgen` crate version in Cargo.lock,
+      # or the generated glue refuses to load. Read it from the lock file
+      # rather than pinning it twice.
+      - name: Install wasm-bindgen-cli matching Cargo.lock
+        run: |
+          version=$(cargo metadata --format-version 1 --locked \
+            | jq -r '.packages[] | select(.name == "wasm-bindgen") | .version')
+          echo "wasm-bindgen $version"
+          cargo install wasm-bindgen-cli --version "$version" --locked
+
+      - name: Build wasm
+        run: cargo build -p printcalc-wasm --target wasm32-unknown-unknown --release
+
+      - name: Generate JS glue
+        run: |
+          wasm-bindgen target/wasm32-unknown-unknown/release/printcalc_wasm.wasm \
+            --out-dir printcalc-wasm/demo/pkg --target web --no-typescript
+
+      - name: Assemble site
+        run: |
+          mkdir -p site
+          cp -r printcalc-wasm/demo/. site/
+          # Example files the demo can open via ?load=, so the live site
+          # has something to try without a slicer to hand.
+          mkdir -p site/examples
+          cp "Testfiles/Cube_0.2mm_PLA_Prusa MINI_20m7s.gcode" site/examples/cube.gcode
+          cp Testfiles/multi_plate_multicolor.gcode.3mf site/examples/multi-plate-multicolor.gcode.3mf
+          cp Testfiles/Shape-Box.sl1s site/examples/shape-box.sl1s
+          touch site/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

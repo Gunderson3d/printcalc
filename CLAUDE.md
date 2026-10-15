@@ -102,6 +102,17 @@ keys and `disk::warn_unknown_keys` prints them. `PrinterProfile` hand-rolls
 `Deserialize` through a flat wire struct precisely so `#[serde(flatten)]`
 can't swallow unknown keys; keep that pattern if you add flattened fields.
 
+## Web demo
+
+`printcalc-wasm/demo/` is a static page (Tailwind via CDN, `app.js` as an
+ES module) over the wasm build; `pkg/` is generated and git-ignored.
+`app.js` keeps its pure helpers (`buildJob`, `slotsFromSummary`,
+`parseMargins`, formatters) exported and DOM-free so they run under Node
+against the fixtures; `main()` only runs when `document` exists. The
+wasm-bindgen CLI version must equal the `wasm-bindgen` crate version in
+`Cargo.lock`. `.github/workflows/pages.yml` builds and publishes the demo
+to GitHub Pages on pushes to `main` that touch the library or wasm crate.
+
 ## Docs
 
 `docs/` follows Diátaxis (tutorial, how-to, reference, explanation). CLI

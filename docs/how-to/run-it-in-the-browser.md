@@ -5,11 +5,24 @@ For pricing a dropped sliced file client-side, with no server.
 `printcalc-wasm` is `wasm-bindgen` bindings over `libprintcalc`. It
 exposes everything that works without a filesystem.
 
+## Use the hosted tool
+
+<https://kaifungamedev.github.io/printcalc/> is `printcalc-wasm/demo/`
+published by the Pages workflow on every push to `main` that touches the
+library or the wasm crate. Drop a sliced file, or open a bundled job
+`.toml` saved by the CLI. It offers the same built-in presets as the
+CLI, lets you edit any number, and prints the same receipt. Rates,
+margins and the currency symbol are kept in your browser's local
+storage. Nothing is uploaded.
+
+`?load=<url>` opens a file at startup; the site ships three under
+`examples/`, e.g. `?load=examples/cube.gcode`.
+
 ## Build it
 
 ```sh
 rustup target add wasm32-unknown-unknown          # once
-cargo install wasm-bindgen-cli --version 0.2.126  # match Cargo.lock
+cargo install wasm-bindgen-cli --version 0.2.128  # match Cargo.lock
 
 cargo build -p printcalc-wasm --target wasm32-unknown-unknown --release
 wasm-bindgen target/wasm32-unknown-unknown/release/printcalc_wasm.wasm \
@@ -28,13 +41,18 @@ has to go over HTTP:
 python3 -m http.server -d printcalc-wasm/demo 8000
 ```
 
-Then open `http://localhost:8000/`.
+Then open `http://localhost:8000/`. Serve the repository root instead
+and the fixtures become loadable:
+`http://localhost:8000/printcalc-wasm/demo/?load=/Testfiles/Shape-Box.sl1s`.
 
 `demo/pkg/` is a generated build artifact and is git-ignored. Regenerate
-it after any change to the crate.
+it after any change to the crate. The page pulls Tailwind and the IBM
+Plex fonts from CDNs, so it needs network access the first time.
 
 ## Price a dropped file
 
+The demo's `app.js` is a worked example of everything below: state in,
+`calculate` out, with the receipt rendered from the `CostBreakdown`.
 Every function returns a JSON string; `JSON.parse` it on the JS side.
 
 ```js

@@ -43,6 +43,10 @@ Shell completions and a man page come from the binary itself:
 `printcalc completions zsh`, `printcalc man`. See the
 [CLI reference](docs/reference/cli.md#printcalc-completions).
 
+No install at all: **<https://kaifungamedev.github.io/printcalc/>** runs
+the same calculation in your browser, with the same built-in presets.
+Files stay on your machine.
+
 ## Start here
 
 **[Pricing your first print](docs/tutorial/pricing-your-first-print.md)**
