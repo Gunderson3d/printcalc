@@ -271,7 +271,9 @@ mod tests {
         metadata.insert("filament used [g]".to_string(), "3.10".to_string());
         assert!(matches!(
             build_slice_summary(&metadata, SourceFormat::Gcode),
-            Err(ParseError::MissingField(key)) if key == TIME_KEY
+            Err(ParseError::MissingField(
+                "estimated printing time (normal mode)"
+            ))
         ));
     }
 
