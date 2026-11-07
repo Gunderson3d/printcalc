@@ -118,7 +118,7 @@
       <div id="drop" class="rounded-lg border border-rule bg-surface p-5 flex flex-wrap items-center gap-4"
            role="group" aria-label="Choose a sliced file">
         <div class="flex-1 min-w-[14rem]">
-          <p id="file-name" class="font-medium">Drop a sliced file here</p>
+          <p id="file-name" class="font-medium">Entered by hand</p>
           <p id="file-meta" class="text-sm text-muted mt-0.5">.gcode, .bgcode, .gcode.3mf, .sl1 or .sl1s, or a job .toml plus the sliced file it names. Nothing leaves your browser.</p>
         </div>
         <div class="flex gap-2">
@@ -128,7 +128,7 @@
           <label class="btn-quiet cursor-pointer" title="A job saved by the CLI. Bundled jobs open on their own; default and full ones ask for the sliced file they name.">Open job .toml
             <input id="job-input" type="file" class="sr-only" multiple accept=".toml,.gcode,.bgcode,.3mf,.sl1,.sl1s">
           </label>
-          <button id="manual-start" class="btn-quiet" type="button" title="No sliced file? Type the print time and material amounts from your slicer.">Enter by hand</button>
+          <button id="manual-start" class="btn-quiet" type="button" hidden title="Clear the file and type the print time and material amounts instead.">Enter by hand</button>
         </div>
       </div>
       <div id="pending" class="mt-3 rounded-md bg-act-wash text-ink text-sm px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-2" hidden role="status">
@@ -145,7 +145,7 @@
   <!-- Receipt: second on phones, right column spanning both rows on desktop -->
   <aside class="lg:col-span-5 lg:col-start-8 lg:row-span-2 lg:row-start-1 lg:self-stretch">
     <div class="lg:sticky lg:top-6 rounded-lg bg-surface border border-rule p-5 font-mono text-sm tnum">
-      <div id="receipt-empty" class="text-muted py-10 text-center">Drop a sliced file, or enter the numbers by hand, to see its cost.</div>
+      <div id="receipt-empty" class="text-muted py-10 text-center">Fill in the print and choose a printer to see its cost.</div>
       <div id="receipt" hidden></div>
       <div id="receipt-actions" hidden class="mt-5 pt-4 border-t border-rule flex flex-wrap gap-2 font-sans">
         <button id="dl-breakdown" class="btn-quiet" type="button">Download breakdown</button>

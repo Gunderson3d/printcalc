@@ -24,6 +24,7 @@ export const DEFAULTS = {
 };
 
 const STORAGE_KEY = 'printcalc.defaults.v1';
+const MANUAL_HINT = 'Typed in below. Or drop a sliced file, or a job .toml plus the sliced file it names, to read them from it. Nothing leaves your browser.';
 const FILE_HINT = '.gcode, .bgcode, .gcode.3mf, .sl1 or .sl1s, or a job .toml plus the sliced file it names. Nothing leaves your browser.';
 
 // ---------------------------------------------------------------- pure
@@ -432,7 +433,7 @@ async function main() {
   function startManual() {
     // Keep a printer of the right kind if one was already picked.
     const keepPrinter = state.printer?.kind === 'fdm';
-    state.manual = { process: 'fdm', hours: 1, minutes: 0, slots: [{ slot_id: '1', amount: 50 }] };
+    state.manual = { process: 'fdm', hours: 0, minutes: 0, slots: [{ slot_id: '1', amount: 0 }] };
     state.name = 'manual';
     state.sliceName = null;
     state.loaded = null;
@@ -484,7 +485,10 @@ async function main() {
     const totalSeconds = s.plates.reduce((a, p) => a + p.print_time_seconds, 0);
     const grams = state.slots.reduce((a, u) => a + u.grams, 0);
     const ml = state.slots.reduce((a, u) => a + u.ml, 0);
-    $('file-meta').textContent = `${s.plates.length} plate${s.plates.length === 1 ? '' : 's'}, ${formatDuration(totalSeconds)}, ${formatAmount(grams, ml)}`;
+    // Typed numbers are already on screen; say where else they can come from.
+    $('file-meta').textContent = state.manual
+      ? MANUAL_HINT
+      : `${s.plates.length} plate${s.plates.length === 1 ? '' : 's'}, ${formatDuration(totalSeconds)}, ${formatAmount(grams, ml)}`;
   }
 
   // ---- setup rendering (structure changes only on file load)
@@ -498,13 +502,14 @@ async function main() {
     $('manual').hidden = !manual;
     $('detected-section').hidden = Boolean(manual);
     $('slot-add').hidden = !manual;
+    $('manual-start').hidden = Boolean(manual);
     $('materials-note').textContent = manual
       ? 'One per material the print uses. Prices per kg, or per liter for resin.'
       : 'One per slot the file used. Prices per kg, or per liter for resin.';
     if (manual) {
       $('manual-process').value = manual.process;
-      $('manual-hours').value = manual.hours;
-      $('manual-minutes').value = manual.minutes;
+      $('manual-hours').value = manual.hours || '';
+      $('manual-minutes').value = manual.minutes || '';
     }
 
     // Detected
@@ -919,6 +924,10 @@ async function main() {
     const base = from ?? { name: usage.profile_name ?? usage.material_type ?? `slot-${usage.slot_id}`, kind, price: 20, efficiency_factor: 1.5 };
     return { ...base, kind, name: base.name.endsWith('-custom') ? base.name : `${base.name}-custom` };
   }
+
+  // Entering by hand is the starting point: every field is on screen
+  // before any file is chosen, and dropping one replaces it.
+  startManual();
 
   // ?load=<url> fetches a sliced file at startup — handy for demos and screenshots.
   const params = new URLSearchParams(location.search);
