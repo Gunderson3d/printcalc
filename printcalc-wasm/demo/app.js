@@ -621,22 +621,37 @@ async function main() {
       wrap.append(el('p', { class: 'text-sm text-muted', text: 'None yet.' }));
       return;
     }
-    const names = state.hardware.map((h) => h.name.trim());
-    state.hardware.forEach((item, i) => {
-      const dup = item.name.trim() && names.indexOf(item.name.trim()) !== i;
+    const rows = state.hardware.map((item, i) => {
       const bind = (key, input) => input.addEventListener('input', () => {
         item[key] = key === 'name' ? input.value : Number(input.value);
-        if (key === 'name') renderHardware(); else recalc();
+        // Never re-render on typing: rebuilding the rows would drop focus.
+        if (key === 'name') markDuplicates();
+        recalc();
       });
-      const name = el('input', { class: `field ${dup ? 'border-bad' : ''}`, type: 'text', value: item.name, placeholder: 'M3 brass insert', 'aria-label': 'Item name', 'aria-invalid': dup ? 'true' : null });
+      const name = el('input', { class: 'field', type: 'text', value: item.name, placeholder: 'M3 brass insert', 'aria-label': 'Item name' });
       const cost = el('input', { class: 'num', type: 'number', min: 0, step: 0.01, value: item.cost, 'aria-label': 'Cost each' });
       const qty = el('input', { class: 'num', type: 'number', min: 1, step: 1, value: item.quantity, 'aria-label': 'Count per unit' });
       bind('name', name); bind('cost', cost); bind('quantity', qty);
-      const remove = el('button', { class: 'btn-ghost', type: 'button', text: 'Remove', 'aria-label': `Remove ${item.name || 'item'}`,
+      const remove = el('button', { class: 'btn-ghost', type: 'button', text: 'Remove',
         onclick: () => { state.hardware.splice(i, 1); renderHardware(); recalc(); } });
-      wrap.append(el('div', { class: 'grid grid-cols-[1fr_5.5rem_4.5rem_auto] gap-2 items-center' }, name, cost, qty, remove));
-      if (dup) wrap.append(el('p', { class: 'text-xs text-bad -mt-1', text: `"${item.name.trim()}" is listed twice; the later entry wins.` }));
+      const warning = el('p', { class: 'text-xs text-bad -mt-1', hidden: true });
+      wrap.append(el('div', { class: 'grid grid-cols-[1fr_5.5rem_4.5rem_auto] gap-2 items-center' }, name, cost, qty, remove), warning);
+      return { item, name, remove, warning };
     });
+    // Same rule as Job::add_hardware: the later of two equal names wins.
+    function markDuplicates() {
+      const names = state.hardware.map((h) => h.name.trim());
+      rows.forEach(({ item, name, remove, warning }, i) => {
+        const trimmed = item.name.trim();
+        const dup = trimmed !== '' && names.indexOf(trimmed) !== i;
+        name.classList.toggle('border-bad', dup);
+        if (dup) name.setAttribute('aria-invalid', 'true'); else name.removeAttribute('aria-invalid');
+        remove.setAttribute('aria-label', `Remove ${item.name || 'item'}`);
+        warning.hidden = !dup;
+        warning.textContent = dup ? `"${trimmed}" is listed twice; the later entry wins.` : '';
+      });
+    }
+    markDuplicates();
   }
   $('hardware-add').addEventListener('click', () => {
     state.hardware.push({ name: '', cost: 0, quantity: 1 });
