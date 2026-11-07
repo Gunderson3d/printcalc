@@ -128,6 +128,7 @@
           <label class="btn-quiet cursor-pointer" title="A job saved by the CLI. Bundled jobs open on their own; default and full ones ask for the sliced file they name.">Open job .toml
             <input id="job-input" type="file" class="sr-only" multiple accept=".toml,.gcode,.bgcode,.3mf,.sl1,.sl1s">
           </label>
+          <button id="manual-start" class="btn-quiet" type="button" title="No sliced file? Type the print time and material amounts from your slicer.">Enter by hand</button>
         </div>
       </div>
       <div id="pending" class="mt-3 rounded-md bg-act-wash text-ink text-sm px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-2" hidden role="status">
@@ -144,7 +145,7 @@
   <!-- Receipt: second on phones, right column spanning both rows on desktop -->
   <aside class="lg:col-span-5 lg:col-start-8 lg:row-span-2 lg:row-start-1 lg:self-stretch">
     <div class="lg:sticky lg:top-6 rounded-lg bg-surface border border-rule p-5 font-mono text-sm tnum">
-      <div id="receipt-empty" class="text-muted py-10 text-center">Drop a sliced file to see its cost.</div>
+      <div id="receipt-empty" class="text-muted py-10 text-center">Drop a sliced file, or enter the numbers by hand, to see its cost.</div>
       <div id="receipt" hidden></div>
       <div id="receipt-actions" hidden class="mt-5 pt-4 border-t border-rule flex flex-wrap gap-2 font-sans">
         <button id="dl-breakdown" class="btn-quiet" type="button">Download breakdown</button>
@@ -157,7 +158,29 @@
   <div class="lg:col-span-7 lg:col-start-1">
     <div id="setup" hidden class="space-y-6">
 
-      <section class="section !pt-6 !border-t" aria-labelledby="h-detected">
+      <section id="manual" hidden class="section !pt-6 !border-t" aria-labelledby="h-manual">
+        <h2 id="h-manual" class="text-base font-semibold">The print</h2>
+        <p class="text-sm text-muted mt-1">From your slicer's summary. Each material's amount goes with it below.</p>
+        <div class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="col-span-2">
+            <label class="lbl" for="manual-process">Process</label>
+            <select id="manual-process" class="field">
+              <option value="fdm">FDM: filament, in grams</option>
+              <option value="resin">Resin, in ml</option>
+            </select>
+          </div>
+          <div>
+            <label class="lbl" for="manual-hours">Print hours</label>
+            <input id="manual-hours" class="num" type="number" min="0" step="1">
+          </div>
+          <div>
+            <label class="lbl" for="manual-minutes">Minutes</label>
+            <input id="manual-minutes" class="num" type="number" min="0" step="1">
+          </div>
+        </div>
+      </section>
+
+      <section id="detected-section" class="section !pt-6 !border-t" aria-labelledby="h-detected">
         <h2 id="h-detected" class="text-base font-semibold">What the file says</h2>
         <dl id="detected" class="mt-3 grid sm:grid-cols-[auto_1fr] gap-x-6 gap-y-1 sm:gap-y-1.5 text-sm [&>dd]:mb-1.5 sm:[&>dd]:mb-0"></dl>
       </section>
@@ -178,8 +201,11 @@
       </section>
 
       <section class="section" aria-labelledby="h-materials">
-        <h2 id="h-materials" class="text-base font-semibold">Materials</h2>
-        <p class="text-sm text-muted mt-1">One per slot the file used. Prices per kg, or per liter for resin.</p>
+        <div class="flex items-baseline justify-between gap-4">
+          <h2 id="h-materials" class="text-base font-semibold">Materials</h2>
+          <button id="slot-add" class="btn-ghost" type="button" hidden>+ Add material</button>
+        </div>
+        <p id="materials-note" class="text-sm text-muted mt-1">One per slot the file used. Prices per kg, or per liter for resin.</p>
         <div id="slots" class="mt-3 space-y-4"></div>
       </section>
 

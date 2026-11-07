@@ -7,6 +7,7 @@
 
 import init, {
   parse_slice_bytes,
+  manual_slice,
   parse_job,
   auto_job,
   calculate,
@@ -242,6 +243,7 @@ async function main() {
     sliceName: null,    // filename the current slice came from
     loaded: null,       // { job, slice, wants } when state came from a job .toml
     pendingJob: null,   // { job, filename, wants }: a path-tier job waiting for its sliced file
+    manual: null,       // { process, hours, minutes, slots: [{ slot_id, amount }] } when typed in by hand
     process: 'fdm',
     plate: null,
     printer: null,      // PrinterProfile or null
@@ -284,6 +286,7 @@ async function main() {
     state.slice = slice;
     state.sliceName = filename;
     state.loaded = null;
+    state.manual = null;
     state.process = processOf(slice);
     state.detected = { printer: auto.printer, slots: auto.slots };
     state.slots = auto.slots.map((s) => s.usage);
@@ -340,6 +343,7 @@ async function main() {
     state.slice = job.source.summary;
     state.sliceName = sliceName;
     state.loaded = { job: filename, slice: sliceName, wants };
+    state.manual = null;
     state.process = processOf(state.slice);
     state.detected = null;
     state.slots = slotsFromSummary(state.slice);
@@ -375,7 +379,7 @@ async function main() {
   $('pending-cancel').addEventListener('click', () => {
     state.pendingJob = null;
     renderPending();
-    $('file-name').textContent = state.sliceName ?? state.loaded?.job ?? 'Drop a sliced file here';
+    $('file-name').textContent = state.sliceName ?? state.loaded?.job ?? (state.manual ? 'Entered by hand' : 'Drop a sliced file here');
     if (!state.slice) $('file-meta').textContent = FILE_HINT;
     else renderSetup();
   });
@@ -409,14 +413,99 @@ async function main() {
   for (const evt of ['dragleave', 'drop']) drop.addEventListener(evt, (e) => { e.preventDefault(); drop.classList.remove('ring-2', 'ring-act'); });
   drop.addEventListener('drop', (e) => handleFiles(e.dataTransfer?.files));
 
-  // ---- setup rendering (structure changes only on file load)
-  function renderSetup() {
-    $('setup').hidden = false;
+  // ---- manual entry: the numbers a sliced file would carry, typed in
+  /** Rebuilds the slice and slots from `state.manual`. */
+  function syncManual() {
+    const m = state.manual;
+    const amounts = Object.fromEntries(m.slots.map((s) => [s.slot_id, s.amount]));
+    state.slice = JSON.parse(manual_slice(m.process, m.hours * 3600 + m.minutes * 60, JSON.stringify(amounts)));
+    state.slots = slotsFromSummary(state.slice);
+    // Keep empty slots on screen while they're being filled in.
+    for (const s of m.slots) {
+      if (!state.slots.some((u) => u.slot_id === s.slot_id)) {
+        state.slots.push({ slot_id: s.slot_id, material_type: null, color: null, profile_name: null, vendor: null, price: null, grams: 0, ml: 0 });
+      }
+    }
+    state.slots.sort((a, b) => a.slot_id.localeCompare(b.slot_id, undefined, { numeric: true }));
+  }
+
+  function startManual() {
+    // Keep a printer of the right kind if one was already picked.
+    const keepPrinter = state.printer?.kind === 'fdm';
+    state.manual = { process: 'fdm', hours: 1, minutes: 0, slots: [{ slot_id: '1', amount: 50 }] };
+    state.name = 'manual';
+    state.sliceName = null;
+    state.loaded = null;
+    state.pendingJob = null;
+    state.detected = null;
+    state.process = 'fdm';
+    state.plate = null;
+    if (!keepPrinter) { state.printer = null; state.printerCustom = false; }
+    state.materials = {};
+    syncManual();
+    $('file-name').textContent = 'Entered by hand';
+    showError('');
+    renderPending();
+    renderSetup();
+    recalc();
+  }
+
+  // Typing only updates state; re-rendering would drop focus mid-number.
+  const manualChanged = () => { syncManual(); renderFileMeta(); recalc(); };
+
+  $('manual-start').addEventListener('click', () => { startManual(); $('manual-hours').focus(); });
+  for (const key of ['hours', 'minutes']) {
+    $(`manual-${key}`).addEventListener('input', (e) => {
+      state.manual[key] = Math.max(0, Number(e.target.value) || 0);
+      manualChanged();
+    });
+  }
+  $('manual-process').addEventListener('change', (e) => {
+    state.manual.process = state.process = e.target.value;
+    if (state.printer && state.printer.kind !== state.process) { state.printer = null; state.printerCustom = false; }
+    const kind = state.process === 'resin' ? 'resin' : 'filament';
+    for (const [slot, m] of Object.entries(state.materials)) if (m && m.kind !== kind) state.materials[slot] = null;
+    syncManual();
+    renderSetup();
+    recalc();
+  });
+  $('slot-add').addEventListener('click', () => {
+    const next = String(Math.max(0, ...state.manual.slots.map((s) => Number(s.slot_id) || 0)) + 1);
+    state.manual.slots.push({ slot_id: next, amount: 0 });
+    syncManual();
+    renderSlots();
+    renderFileMeta();
+    recalc();
+    $(`amount-${next}`)?.focus();
+  });
+
+  function renderFileMeta() {
     const s = state.slice;
     const totalSeconds = s.plates.reduce((a, p) => a + p.print_time_seconds, 0);
     const grams = state.slots.reduce((a, u) => a + u.grams, 0);
     const ml = state.slots.reduce((a, u) => a + u.ml, 0);
     $('file-meta').textContent = `${s.plates.length} plate${s.plates.length === 1 ? '' : 's'}, ${formatDuration(totalSeconds)}, ${formatAmount(grams, ml)}`;
+  }
+
+  // ---- setup rendering (structure changes only on file load)
+  function renderSetup() {
+    $('setup').hidden = false;
+    const s = state.slice;
+    renderFileMeta();
+
+    // Manual entry or what the file says
+    const manual = state.manual;
+    $('manual').hidden = !manual;
+    $('detected-section').hidden = Boolean(manual);
+    $('slot-add').hidden = !manual;
+    $('materials-note').textContent = manual
+      ? 'One per material the print uses. Prices per kg, or per liter for resin.'
+      : 'One per slot the file used. Prices per kg, or per liter for resin.';
+    if (manual) {
+      $('manual-process').value = manual.process;
+      $('manual-hours').value = manual.hours;
+      $('manual-minutes').value = manual.minutes;
+    }
 
     // Detected
     const dl = $('detected');
@@ -424,7 +513,9 @@ async function main() {
     const row = (k, v) => dl.append(el('dt', { class: 'text-muted', text: k }), el('dd', { class: 'font-mono' }, v));
     if (s.meta?.slicer) row('Slicer', s.meta.slicer);
     const model = s.meta?.printer_profile ?? s.plates.find((p) => p.printer_model)?.printer_model;
-    if (state.detected) {
+    if (manual) {
+      // Nothing detected; the section is hidden.
+    } else if (state.detected) {
       const m = state.detected.printer;
       row('Printer', m
         ? `${m.matched_on} → ${m.profile.name} (${confidenceLabel(m.confidence)})`
@@ -459,7 +550,7 @@ async function main() {
     }
     sel.append(el('option', { value: '__custom', text: 'Custom numbers' }));
     syncPrinterSelect();
-    $('printer-note').textContent = state.process === 'resin' ? 'Resin file: resin printers only' : '';
+    $('printer-note').textContent = state.process === 'resin' ? `Resin ${manual ? 'print' : 'file'}: resin printers only` : '';
     renderPrinterFields();
 
     // Plate picker
@@ -599,15 +690,43 @@ async function main() {
       price.addEventListener('change', edit('price'));
       eff.addEventListener('change', edit('efficiency_factor'));
 
+      // Manual entry: the amount is typed here, and extra materials can go.
+      const manualSlot = state.manual?.slots.find((s) => s.slot_id === slotId);
+      const amountUnit = kind === 'resin' ? 'ml' : 'g';
+      let amount = null;
+      let remove = null;
+      if (manualSlot) {
+        amount = el('input', { class: 'num', type: 'number', min: 0, step: 0.1, id: `amount-${slotId}`, value: manualSlot.amount || '', placeholder: '0' });
+        amount.addEventListener('input', () => {
+          manualSlot.amount = Math.max(0, Number(amount.value) || 0);
+          manualChanged();
+        });
+        if (state.manual.slots.length > 1) {
+          remove = el('button', { class: 'btn-ghost !px-1 !py-0 ml-2', type: 'button', text: 'Remove', 'aria-label': `Remove material ${slotId}`,
+            onclick: () => {
+              state.manual.slots = state.manual.slots.filter((s) => s.slot_id !== slotId);
+              delete state.materials[slotId];
+              syncManual();
+              renderSlots();
+              renderFileMeta();
+              recalc();
+            } });
+        }
+      }
+
       const swatch = /^#[0-9a-f]{6}$/i.test(usage.color ?? '')
         ? el('span', { class: 'inline-block w-3 h-3 rounded-sm border border-rule align-[-1px] mr-1.5', style: `background:${usage.color}` })
         : null;
-      wrap.append(el('div', { class: 'grid gap-2 sm:grid-cols-[1fr_7rem_6rem]' },
-        el('div', { class: 'sm:col-span-3 text-sm' },
+      const header = manualSlot
+        ? el('div', { class: 'col-span-2 sm:col-span-4 text-sm' }, el('span', { class: 'font-mono', text: `material ${slotId}` }), remove)
+        : el('div', { class: 'sm:col-span-3 text-sm' },
           swatch,
           el('span', { class: 'font-mono', text: slotLabel(usage) }),
-          el('span', { class: 'text-muted', text: `  ${formatAmount(usage.grams, usage.ml)}` })),
-        el('div', {}, el('label', { class: 'lbl', for: `mat-${slotId}`, text: 'Profile' }), sel),
+          el('span', { class: 'text-muted', text: `  ${formatAmount(usage.grams, usage.ml)}` }));
+      wrap.append(el('div', { class: `grid gap-2 ${manualSlot ? 'grid-cols-2 sm:grid-cols-[1fr_6rem_7rem_6rem]' : 'sm:grid-cols-[1fr_7rem_6rem]'}` },
+        header,
+        el('div', { class: manualSlot ? 'col-span-2 sm:col-span-1' : '' }, el('label', { class: 'lbl', for: `mat-${slotId}`, text: 'Profile' }), sel),
+        amount && el('div', { class: 'col-span-2 sm:col-span-1' }, el('label', { class: 'lbl', for: `amount-${slotId}`, text: `Amount, ${amountUnit}` }), amount),
         el('div', {}, el('label', { class: 'lbl', for: `price-${slotId}`, text: `Price /${unit}` }), price),
         el('div', {}, el('label', { class: 'lbl', for: `eff-${slotId}`, text: 'Waste ×' }), eff),
       ));
@@ -690,7 +809,9 @@ async function main() {
     }
     if (!state.printer) { renderReceiptMessage('Choose a printer to see the cost.'); return; }
     const missing = state.slots.filter((u) => !state.materials[u.slot_id]);
-    if (missing.length) { renderReceiptMessage(`Choose a material for ${missing.map(slotLabel).join(', ')}.`); return; }
+    if (missing.length) { renderReceiptMessage(state.manual
+        ? `Choose a profile for ${missing.map((u) => `material ${u.slot_id}`).join(', ')}.`
+        : `Choose a material for ${missing.map(slotLabel).join(', ')}.`); return; }
 
     const job = buildJob({
       name: state.name, slice: state.slice, plate: state.plate, printer: state.printer,

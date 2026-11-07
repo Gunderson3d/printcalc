@@ -8,7 +8,8 @@
 //! about what a job costs.
 //!
 //! `printcalc <file> [flags]` is the primary action (cost a sliced file, or
-//! calc an existing job `.toml`) — `printer`/`filament` are subcommands for
+//! calc an existing job `.toml`; with no file, `--print-time` and
+//! `--grams`/`--ml` cost a print entered by hand) — `printer`/`filament` are subcommands for
 //! profile management. Interactive prompting is on by default for anything
 //! required that wasn't passed as a flag; `--no-input` turns that off.
 
@@ -17,6 +18,7 @@ mod disk;
 mod interactive;
 mod ops;
 
+use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
 
@@ -25,7 +27,7 @@ use clap_complete::Shell;
 
 use cli::config::ConfigArgs;
 use cli::filament::FilamentArgs;
-use cli::job::{JobInvocation, JobType, OutputFormat};
+use cli::job::{JobInput, JobInvocation, JobType, ManualPrint, OutputFormat};
 use cli::printer::PrinterArgs;
 
 #[derive(Parser)]
@@ -35,8 +37,26 @@ use cli::printer::PrinterArgs;
     about = "Calculate 3D print job costs from sliced-file output."
 )]
 struct Cli {
-    /// Sliced file to cost, or an existing job .toml to calc.
+    /// Sliced file to cost, or an existing job .toml to calc. Leave it out
+    /// to enter the print by hand with --print-time and --grams or --ml.
     file: Option<PathBuf>,
+
+    /// No sliced file: how long the print takes, e.g. `1h30m`, `45m`,
+    /// `1.5h` or `1:30`. Use with --grams or --ml.
+    #[arg(long = "print-time", value_name = "DURATION", conflicts_with = "file")]
+    print_time: Option<String>,
+    /// No sliced file: filament used, in grams. One number for a single
+    /// material, or `slot=grams,...` per slot (`1=50,2=12.5`).
+    #[arg(
+        long,
+        value_name = "AMOUNTS",
+        conflicts_with_all = ["file", "ml"]
+    )]
+    grams: Option<String>,
+    /// No sliced file: resin used, in ml. One number, or `slot=ml,...`
+    /// per slot. Needs a resin printer and resin profiles.
+    #[arg(long, value_name = "AMOUNTS", conflicts_with = "file")]
+    ml: Option<String>,
 
     /// Job name; defaults to the output file's stem, or the input file's
     /// stem if no -o.
@@ -179,11 +199,9 @@ fn main() {
                 .and_then(|()| std::io::Write::write_all(&mut std::io::stdout(), &out))
                 .map_err(|e| e.into())
         }
-        None => match cli.file {
-            Some(file) => {
-                let full_file:PathBuf = fs::canonicalize(file).expect("unable to get input file path");
-                cli::job::run(JobInvocation {
-                file: full_file,
+        None => job_input(cli.file, cli.print_time, cli.grams, cli.ml).and_then(|input| {
+            cli::job::run(JobInvocation {
+                input,
                 name: cli.name,
                 printer: cli.printer,
                 filament: cli.filament,
@@ -204,14 +222,34 @@ fn main() {
                 format: cli.format,
                 color: !cli.no_color,
                 interactive,
-            })},
-            None => {
-                Err("no file given — pass a sliced file or a job .toml, or run `printcalc printer`/`printcalc filament`".into())
-            }
-        },
+            })
+        }),
     };
     if let Err(e) = result {
         eprintln!("error: {e}");
         std::process::exit(1);
     }
+}
+
+/// The file to cost (made absolute, so a saved job's path doesn't depend
+/// on where it was run from), or the hand-entered print when there's no
+/// file but one of its flags was given.
+fn job_input(
+    file: Option<PathBuf>,
+    print_time: Option<String>,
+    grams: Option<String>,
+    ml: Option<String>,
+) -> Result<JobInput, Box<dyn Error>> {
+    if let Some(file) = file {
+        let absolute = fs::canonicalize(&file).map_err(|e| format!("{}: {e}", file.display()))?;
+        return Ok(JobInput::File(absolute));
+    }
+    if print_time.is_none() && grams.is_none() && ml.is_none() {
+        return Err("no file given — pass a sliced file or a job .toml, enter a print by hand with --print-time and --grams or --ml, or run `printcalc printer`/`printcalc filament`".into());
+    }
+    Ok(JobInput::Manual(ManualPrint {
+        print_time,
+        grams,
+        ml,
+    }))
 }
