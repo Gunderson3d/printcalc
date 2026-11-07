@@ -17,11 +17,11 @@ your files are parsed and priced in the page. The hosted site counts
 page views with Cloudflare Web Analytics, which sets no cookies and sees
 nothing you drop in.
 
-The beacon is added by the Pages workflow only when the repository
-variable `CF_WEB_ANALYTICS_TOKEN` is set (Settings → Secrets and
-variables → Actions → Variables), to the site token from Cloudflare's
-Web Analytics dashboard. A local build or a fork without it has no
-analytics.
+The Pages workflow adds the beacon to the published page only; the
+source in `printcalc-wasm/demo/` has none, so a local build sends
+nothing. The site token is in the workflow. A repository variable
+`CF_WEB_ANALYTICS_TOKEN` (Settings → Secrets and variables → Actions →
+Variables) overrides it, and a fork gets no analytics unless it sets one.
 
 A `bundled` job opens on its own. A `default` or `full` job names its
 sliced file by path, which the browser can't read, so the page asks for
