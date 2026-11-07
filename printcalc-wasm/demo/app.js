@@ -1,12 +1,13 @@
 // printcalc in the browser. Every number comes from the wasm build of
 // libprintcalc; this file is state, DOM and formatting only.
 //
-// The pure helpers (`slotsFromSummary`, `manualSummary`, `buildJob`,
-// `parseMargins`, formatters) are exported so they can be exercised from Node without a
+// The pure helpers (`slotsFromSummary`, `buildJob`, `parseMargins`,
+// formatters) are exported so they can be exercised from Node without a
 // DOM; `main()` wires them to the page.
 
 import init, {
   parse_slice_bytes,
+  manual_slice,
   parse_job,
   auto_job,
   calculate,
@@ -55,28 +56,6 @@ export function slotsFromSummary(summary) {
   }
   return [...map.values()].sort((a, b) =>
     a.slot_id.localeCompare(b.slot_id, undefined, { numeric: true }));
-}
-
-/**
- * A SliceSummary from numbers typed by hand instead of a sliced file: one
- * plate `seconds` long, with each slot's `amount` in grams (FDM) or ml
- * (resin). Costing reads only the time and amounts; the format just tells
- * the library which process it is, so FDM is labelled plain gcode and
- * resin prusa-sl1.
- * m = { process: 'fdm'|'resin', seconds, slots: [{ slot_id, amount }] }
- */
-export function manualSummary(m) {
-  const unit = m.process === 'resin' ? 'ml' : 'grams';
-  const nonNeg = (v) => Math.max(0, Number(v) || 0);
-  return {
-    source_format: m.process === 'resin' ? 'prusa-sl1' : 'gcode',
-    meta: { slicer: 'entered by hand' },
-    plates: [{
-      plate_index: 1,
-      print_time_seconds: nonNeg(m.seconds),
-      filament_usage: m.slots.map((s) => ({ slot_id: String(s.slot_id), [unit]: nonNeg(s.amount) })),
-    }],
-  };
 }
 
 /** "50, 60, 70" -> [50, 60, 70]; throws on anything that can't price. */
@@ -438,7 +417,8 @@ async function main() {
   /** Rebuilds the slice and slots from `state.manual`. */
   function syncManual() {
     const m = state.manual;
-    state.slice = manualSummary({ process: m.process, seconds: m.hours * 3600 + m.minutes * 60, slots: m.slots });
+    const amounts = Object.fromEntries(m.slots.map((s) => [s.slot_id, s.amount]));
+    state.slice = JSON.parse(manual_slice(m.process, m.hours * 3600 + m.minutes * 60, JSON.stringify(amounts)));
     state.slots = slotsFromSummary(state.slice);
     // Keep empty slots on screen while they're being filled in.
     for (const s of m.slots) {

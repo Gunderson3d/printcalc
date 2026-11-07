@@ -77,7 +77,9 @@ source_format = "bambu-3mf"
 # ... full SliceSummary
 ```
 
-An embedded summary needs no sliced file at cost time. This is what
+An embedded summary needs no sliced file at cost time. A print entered
+by hand, with no sliced file behind it, is always embedded, with
+`source_format = "manual-fdm"` or `"manual-resin"`. This is what
 `--retier bundled` produces.
 
 ### Plate selection

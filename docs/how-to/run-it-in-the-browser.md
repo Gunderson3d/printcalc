@@ -138,6 +138,7 @@ form, and requires a bundled-tier job for exactly that reason. See
 | Function | Returns |
 |---|---|
 | `parse_slice_bytes(bytes, filename)` | `SliceSummary` |
+| `manual_slice(process, seconds, amounts)` | `SliceSummary` |
 | `parse_job(job_toml)` | `Job` |
 | `parse_printer(printer_toml)` | `PrinterProfile` |
 | `parse_material(material_toml)` | `MaterialProfile` |
@@ -149,7 +150,9 @@ form, and requires a bundled-tier job for exactly that reason. See
 | `printcalc_wasm_version()` | version string |
 
 All arguments and returns are JSON strings except `parse_slice_bytes`,
-which takes raw bytes.
+which takes raw bytes, and `manual_slice`, which takes `"fdm"` or
+`"resin"` and a number of seconds before its JSON `{ slot_id: amount }`
+map of grams or ml.
 
 `hardware` for `new_job` is an array of `{ name, cost, quantity? }`.
 Names are unique within a job: a later entry with the same name replaces
