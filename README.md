@@ -63,6 +63,7 @@ printer and filament.
 
 - [Cost a multi-filament job](docs/how-to/cost-a-multi-filament-job.md)
 - [Price a batch](docs/how-to/price-a-batch.md)
+- [Cost a print without a sliced file](docs/how-to/cost-a-print-without-a-file.md)
 - [Correct a wrong detection](docs/how-to/correct-a-wrong-detection.md)
 - [Save and reuse jobs](docs/how-to/save-and-reuse-jobs.md)
 - [Set margins and rates](docs/how-to/set-margins-and-rates.md)

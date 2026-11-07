@@ -139,5 +139,7 @@ time, and grams (FDM) or ml (resin) per slot. Its `source_format` is
 `manual-fdm` or `manual-resin`, which carries the process, so costing
 checks printer and material kinds just as it does for a file. There's no
 metadata to match on, so profiles are always chosen by hand. It needs no
-Cargo feature, since there's nothing to parse. The browser demo's
-**Enter by hand** uses it through the wasm `manual_slice`.
+Cargo feature, since there's nothing to parse. The CLI builds one from
+`--print-time` with `--grams` or `--ml` (see
+[the CLI reference](cli.md#without-a-sliced-file)), and the browser
+demo's **Enter by hand** uses it through the wasm `manual_slice`.

@@ -338,6 +338,12 @@ fn expected_material_kind(format: SourceFormat) -> MaterialKind {
     }
 }
 
+/// Whether `format` is a print typed in by hand rather than a sliced file,
+/// which the kind-mismatch messages word differently.
+fn is_manual(format: SourceFormat) -> bool {
+    matches!(format, SourceFormat::ManualFdm | SourceFormat::ManualResin)
+}
+
 impl fmt::Display for CalcError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -355,9 +361,27 @@ impl fmt::Display for CalcError {
                 printer_name,
                 printer_kind,
                 format,
+            } if is_manual(*format) => write!(
+                f,
+                "printer {printer_name:?} is {printer_kind:?}, but this print was entered by hand as {:?}",
+                expected_printer_kind(*format)
+            ),
+            CalcError::PrinterKindMismatch {
+                printer_name,
+                printer_kind,
+                format,
             } => write!(
                 f,
                 "printer {printer_name:?} is {printer_kind:?}, but {format:?} sliced files are {:?} prints",
+                expected_printer_kind(*format)
+            ),
+            CalcError::FilamentKindMismatch {
+                filament_name,
+                filament_kind,
+                format,
+            } if is_manual(*format) => write!(
+                f,
+                "filament profile {filament_name:?} is {filament_kind:?}, but this print was entered by hand as {:?}",
                 expected_printer_kind(*format)
             ),
             CalcError::FilamentKindMismatch {
@@ -1393,6 +1417,10 @@ mod tests {
                 printer_kind: PrinterKind::Fdm,
                 format: SourceFormat::ManualResin,
             }
+        );
+        assert_eq!(
+            err.to_string(),
+            "printer \"bambu-a1\" is Fdm, but this print was entered by hand as Resin"
         );
     }
 

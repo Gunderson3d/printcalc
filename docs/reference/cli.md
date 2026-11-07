@@ -13,7 +13,9 @@ command also accepts `--no-color`.
 Costs a sliced file, or re-costs a saved job.
 
 `FILE` is a sliced file or a job `.toml`. The choice is made by
-extension: `.toml` is a job file, anything else is a sliced file.
+extension: `.toml` is a job file, anything else is a sliced file. Leave
+it out to enter the print by hand — see
+[Without a sliced file](#without-a-sliced-file).
 
 With no other flags, `printcalc` reads the printer and filament the
 slicer recorded and matches them against your profiles — see
@@ -40,6 +42,28 @@ name replaces that entry, a new name adds one.
 `--filament` expands per slot when the job is saved, so the mapping is
 visible in the file. `--default-filament` stays a single job-level
 fallback. See [job files](job-file.md#materials).
+
+### Without a sliced file
+
+| Flag | Meaning |
+|---|---|
+| `--print-time <DURATION>` | How long the print takes: `1h30m`, `45m`, `90s`, `1.5h` or `1:30`. A bare number is rejected. |
+| `--grams <AMOUNTS>` | Filament used, in grams: `50` for one material, or `1=50,2=12.5` per slot. |
+| `--ml <AMOUNTS>` | Resin used, in ml, in the same forms. Can't be combined with `--grams`. |
+
+Any of these with no `FILE` costs a print entered by hand. A missing
+`--print-time`, or a missing amount, is prompted for (as grams), or under
+`--no-input` is an error naming the flag. None of them can be combined
+with a `FILE`.
+
+The summary is built by `SliceSummary::manual` with `source_format`
+`manual-fdm` (`--grams`) or `manual-resin` (`--ml`), and the printer and
+filaments must be that kind. Slots in `--grams`/`--ml` are matched to
+`--filament-map` by name; a single number is slot `1`. Nothing is
+detected, so `--printer` and `--filament` are needed (or prompted for).
+A job saved with `-o` embeds the summary at every tier, since there's no
+file to point back to. See
+[Cost a print without a sliced file](../how-to/cost-a-print-without-a-file.md).
 
 ### Job inputs
 
