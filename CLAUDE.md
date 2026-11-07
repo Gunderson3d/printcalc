@@ -111,7 +111,8 @@ ES module) over the wasm build; `pkg/` is generated and git-ignored.
 against the fixtures; `main()` only runs when `document` exists. The
 wasm-bindgen CLI version must equal the `wasm-bindgen` crate version in
 `Cargo.lock`. `.github/workflows/pages.yml` builds and publishes the demo
-to GitHub Pages on pushes to `main` that touch the library or wasm crate.
+to GitHub Pages (<https://gunderson3d.github.io/printcalc/>) when a release
+is published, or by hand via `workflow_dispatch`.
 
 ## Docs
 
