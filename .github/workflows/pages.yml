@@ -63,6 +63,24 @@ jobs:
           cp Testfiles/Shape-Box.sl1s site/examples/shape-box.sl1s
           touch site/.nojekyll
 
+      # Cloudflare Web Analytics (cookieless page views). The beacon is
+      # added only to the published page, and only when the repository
+      # variable CF_WEB_ANALYTICS_TOKEN is set, so local builds and forks
+      # send nothing.
+      - name: Add Cloudflare Web Analytics
+        if: ${{ vars.CF_WEB_ANALYTICS_TOKEN != '' }}
+        env:
+          CF_TOKEN: ${{ vars.CF_WEB_ANALYTICS_TOKEN }}
+        run: |
+          case "$CF_TOKEN" in
+            *[!0-9a-fA-F]*) echo "CF_WEB_ANALYTICS_TOKEN must be hex" >&2; exit 1 ;;
+          esac
+          beacon="<script defer src=\"https://static.cloudflareinsights.com/beacon.min.js\" data-cf-beacon='{\"token\": \"$CF_TOKEN\"}'></script>"
+          awk -v b="$beacon" '/<\/body>/ && !done { print b; done = 1 } { print }' \
+            site/index.html > site/index.html.tmp
+          mv site/index.html.tmp site/index.html
+          grep -q cloudflareinsights site/index.html
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

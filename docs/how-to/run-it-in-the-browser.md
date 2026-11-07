@@ -12,7 +12,16 @@ published by the Pages workflow on every release (or by hand from the
 Actions tab). Drop a sliced file, or open a job `.toml` saved by the
 CLI. It offers the same built-in presets as the CLI, lets you edit any
 number, and prints the same receipt. Rates, margins and the currency
-symbol are kept in your browser's local storage. Nothing is uploaded.
+symbol are kept in your browser's local storage. Nothing is uploaded:
+your files are parsed and priced in the page. The hosted site counts
+page views with Cloudflare Web Analytics, which sets no cookies and sees
+nothing you drop in.
+
+The beacon is added by the Pages workflow only when the repository
+variable `CF_WEB_ANALYTICS_TOKEN` is set (Settings → Secrets and
+variables → Actions → Variables), to the site token from Cloudflare's
+Web Analytics dashboard. A local build or a fork without it has no
+analytics.
 
 A `bundled` job opens on its own. A `default` or `full` job names its
 sliced file by path, which the browser can't read, so the page asks for
