@@ -19,6 +19,7 @@ which takes raw bytes. `JSON.parse` the results on the JS side.
 | `auto_job(name, slice, printers?, materials?, efficiency_factor)` | `{ job, printer, slots }` |
 | `calculate(job, defaults?)` | `CostBreakdown` |
 | `calc_job(job_toml)` | `CostBreakdown`, one-shot from TOML |
+| `job_to_toml(job)` | bundled-tier job TOML |
 | `builtin_printers()` / `builtin_filaments()` | preset arrays |
 | `printcalc_wasm_version()` | version string |
 

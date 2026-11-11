@@ -10,6 +10,7 @@ import init, {
   parse_job,
   auto_job,
   calculate,
+  job_to_toml,
   builtin_printers,
   builtin_filaments,
   printcalc_wasm_version,
@@ -755,14 +756,21 @@ async function main() {
   }
 
   // ---- downloads
-  const download = (name, text) => {
-    const blob = new Blob([text], { type: 'application/json' });
+  const download = (name, text, type) => {
+    const blob = new Blob([text], { type });
     const a = el('a', { href: URL.createObjectURL(blob), download: name });
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
-  $('dl-breakdown').addEventListener('click', () => state.lastBreakdown && download(`${state.name}-cost.json`, JSON.stringify(state.lastBreakdown, null, 2)));
-  $('dl-job').addEventListener('click', () => state.lastJob && download(`${state.name}.job.json`, JSON.stringify(state.lastJob, null, 2)));
+  $('dl-breakdown').addEventListener('click', () => state.lastBreakdown && download(`${state.name}-cost.json`, JSON.stringify(state.lastBreakdown, null, 2), 'application/json'));
+  $('dl-job').addEventListener('click', () => {
+    if (!state.lastJob) return;
+    try {
+      download(`${state.name}.toml`, job_to_toml(JSON.stringify(state.lastJob)), 'application/toml');
+    } catch (e) {
+      showError(`Couldn't export the job: ${e.message ?? e}`);
+    }
+  });
 
   // ---- helpers
   function groupBy(list, keyFn) {

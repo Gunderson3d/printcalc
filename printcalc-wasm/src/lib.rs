@@ -1,7 +1,8 @@
 //! WASM bindings over `libprintcalc` for in-browser use, mirroring the
 //! lib's crate-root API one-for-one for everything that makes sense
 //! without a filesystem: `parse_slice_bytes`, `parse_job`, `new_job`, and
-//! `calculate`, plus the `calc_job` one-shot (TOML in, breakdown out)
+//! `calculate`, plus the `calc_job` one-shot (TOML in, breakdown out),
+//! `job_to_toml` (bundled-tier export),
 //! and the built-in preset listings. The lib's `disk` helpers
 //! (`read_*`, `Job::slice_summary` on a `Path` source) have no counterpart
 //! here — a browser has no filesystem.
@@ -21,10 +22,11 @@
 use wasm_bindgen::prelude::*;
 
 use libprintcalc::{
-    CostDefaults, HardwareItem, Job, JobSource, LaborCost, MaterialProfile, PrinterProfile,
-    ProfileRef, SliceSummary, auto_job as lib_auto_job, builtin, calculate as lib_calculate,
-    new_job as lib_new_job, parse_job as lib_parse_job, parse_material as lib_parse_material,
-    parse_printer as lib_parse_printer, parse_slice_bytes as lib_parse_slice_bytes,
+    CostDefaults, HardwareItem, Job, JobSource, JobTier, LaborCost, MaterialProfile,
+    PrinterProfile, ProfileRef, SliceSummary, auto_job as lib_auto_job, builtin,
+    calculate as lib_calculate, new_job as lib_new_job, parse_job as lib_parse_job,
+    parse_material as lib_parse_material, parse_printer as lib_parse_printer,
+    parse_slice_bytes as lib_parse_slice_bytes,
 };
 use std::collections::HashMap;
 
@@ -237,6 +239,19 @@ pub fn calculate(job_json: &str, defaults_json: Option<String>) -> Result<String
     };
     let breakdown = lib_calculate(&job, &defaults).map_err(|e| JsError::new(&e.to_string()))?;
     serde_json::to_string(&breakdown).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Serializes a `job` (JSON) to job TOML at the Bundled tier — printer
+/// and materials embedded (built-in preset names resolved), slice summary
+/// embedded — so the file reopens here or in the CLI with nothing else
+/// alongside it. Mirrors `libprintcalc::Job::to_toml(JobTier::Bundled)`;
+/// a `path` source fails, since there's no filesystem to read it from.
+#[wasm_bindgen]
+pub fn job_to_toml(job_json: &str) -> Result<String, JsError> {
+    let job: Job =
+        serde_json::from_str(job_json).map_err(|e| JsError::new(&format!("job JSON: {e}")))?;
+    job.to_toml(JobTier::Bundled)
+        .map_err(|e| JsError::new(&e.to_string()))
 }
 
 /// Costs a job given as TOML text, returning its `CostBreakdown` as JSON.

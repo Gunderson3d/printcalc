@@ -134,6 +134,7 @@ form, and requires a bundled-tier job for exactly that reason. See
 | `auto_job(name, slice, printers?, materials?, efficiency_factor)` | `{ job, printer, slots }` |
 | `calculate(job, defaults?)` | `CostBreakdown` |
 | `calc_job(job_toml)` | `CostBreakdown` |
+| `job_to_toml(job)` | job TOML (bundled tier) |
 | `builtin_printers()` / `builtin_filaments()` | preset arrays |
 | `printcalc_wasm_version()` | version string |
 
