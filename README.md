@@ -43,9 +43,9 @@ Shell completions and a man page come from the binary itself:
 `printcalc completions zsh`, `printcalc man`. See the
 [CLI reference](docs/reference/cli.md#printcalc-completions).
 
-No install at all: **<https://gunderson3d.github.io/printcalc/>** runs
+Try it on the web: **<https://gunderson3d.github.io/printcalc/>** runs
 the same calculation in your browser, with the same built-in presets.
-Files stay on your machine.
+No files are sent to the server.
 
 ## Start here
 
@@ -63,6 +63,7 @@ printer and filament.
 
 - [Cost a multi-filament job](docs/how-to/cost-a-multi-filament-job.md)
 - [Price a batch](docs/how-to/price-a-batch.md)
+- [Cost a print without a sliced file](docs/how-to/cost-a-print-without-a-file.md)
 - [Correct a wrong detection](docs/how-to/correct-a-wrong-detection.md)
 - [Save and reuse jobs](docs/how-to/save-and-reuse-jobs.md)
 - [Set margins and rates](docs/how-to/set-margins-and-rates.md)

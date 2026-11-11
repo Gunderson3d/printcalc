@@ -314,14 +314,15 @@ pub fn material_kind_for(format: SourceFormat) -> MaterialKind {
     expected_material_kind(format)
 }
 
-/// The `PrinterKind` a sliced file's format implies — only `prusa-sl1` is
-/// resin today; every other format is FDM.
+/// The `PrinterKind` a sliced file's format implies — `prusa-sl1` and
+/// `manual-resin` are resin; every other format is FDM.
 fn expected_printer_kind(format: SourceFormat) -> PrinterKind {
     match format {
-        SourceFormat::PrusaSl1 => PrinterKind::Resin,
-        SourceFormat::Bambu3mf | SourceFormat::Gcode | SourceFormat::PrusaBgcode => {
-            PrinterKind::Fdm
-        }
+        SourceFormat::PrusaSl1 | SourceFormat::ManualResin => PrinterKind::Resin,
+        SourceFormat::Bambu3mf
+        | SourceFormat::Gcode
+        | SourceFormat::PrusaBgcode
+        | SourceFormat::ManualFdm => PrinterKind::Fdm,
     }
 }
 
@@ -329,11 +330,18 @@ fn expected_printer_kind(format: SourceFormat) -> PrinterKind {
 /// [`expected_printer_kind`].
 fn expected_material_kind(format: SourceFormat) -> MaterialKind {
     match format {
-        SourceFormat::PrusaSl1 => MaterialKind::Resin,
-        SourceFormat::Bambu3mf | SourceFormat::Gcode | SourceFormat::PrusaBgcode => {
-            MaterialKind::Filament
-        }
+        SourceFormat::PrusaSl1 | SourceFormat::ManualResin => MaterialKind::Resin,
+        SourceFormat::Bambu3mf
+        | SourceFormat::Gcode
+        | SourceFormat::PrusaBgcode
+        | SourceFormat::ManualFdm => MaterialKind::Filament,
     }
+}
+
+/// Whether `format` is a print typed in by hand rather than a sliced file,
+/// which the kind-mismatch messages word differently.
+fn is_manual(format: SourceFormat) -> bool {
+    matches!(format, SourceFormat::ManualFdm | SourceFormat::ManualResin)
 }
 
 impl fmt::Display for CalcError {
@@ -353,9 +361,27 @@ impl fmt::Display for CalcError {
                 printer_name,
                 printer_kind,
                 format,
+            } if is_manual(*format) => write!(
+                f,
+                "printer {printer_name:?} is {printer_kind:?}, but this print was entered by hand as {:?}",
+                expected_printer_kind(*format)
+            ),
+            CalcError::PrinterKindMismatch {
+                printer_name,
+                printer_kind,
+                format,
             } => write!(
                 f,
                 "printer {printer_name:?} is {printer_kind:?}, but {format:?} sliced files are {:?} prints",
+                expected_printer_kind(*format)
+            ),
+            CalcError::FilamentKindMismatch {
+                filament_name,
+                filament_kind,
+                format,
+            } if is_manual(*format) => write!(
+                f,
+                "filament profile {filament_name:?} is {filament_kind:?}, but this print was entered by hand as {:?}",
                 expected_printer_kind(*format)
             ),
             CalcError::FilamentKindMismatch {
@@ -1338,6 +1364,63 @@ mod tests {
                 filament_kind: MaterialKind::Filament,
                 format: SourceFormat::PrusaSl1,
             }
+        );
+    }
+
+    /// A hand-entered resin print costs like an `.sl1` file with the same
+    /// time and ml.
+    #[test]
+    fn manual_resin_slice_costs_like_a_resin_file() {
+        let material_profiles =
+            HashMap::from([(SINGLE_MATERIAL_SLOT.to_string(), resin("grey-resin", 40.0))]);
+        let job = base_job(
+            HashMap::from([(SINGLE_MATERIAL_SLOT.to_string(), linked("grey-resin"))]),
+            0.0,
+        );
+        let cost = |slice: &SliceSummary| {
+            calculate_cost(
+                &job,
+                slice,
+                &resin_printer(),
+                &material_profiles,
+                None,
+                &CostDefaults::default(),
+            )
+            .unwrap()
+        };
+
+        let manual =
+            SliceSummary::manual(PrinterKind::Resin, 3600.0, [(SINGLE_MATERIAL_SLOT, 10.0)]);
+        assert_eq!(cost(&manual), cost(&resin_slice(10.0)));
+    }
+
+    /// The manual format carries its process, so the kind check still
+    /// catches an FDM printer on a hand-entered resin print.
+    #[test]
+    fn fdm_printer_against_manual_resin_slice_is_an_error() {
+        let job = base_job(HashMap::new(), 0.0);
+        let manual = SliceSummary::manual(PrinterKind::Resin, 600.0, [(SINGLE_MATERIAL_SLOT, 5.0)]);
+
+        let err = calculate_cost(
+            &job,
+            &manual,
+            &bambu_a1(),
+            &HashMap::new(),
+            None,
+            &CostDefaults::default(),
+        )
+        .unwrap_err();
+        assert_eq!(
+            err,
+            CalcError::PrinterKindMismatch {
+                printer_name: "bambu-a1".into(),
+                printer_kind: PrinterKind::Fdm,
+                format: SourceFormat::ManualResin,
+            }
+        );
+        assert_eq!(
+            err.to_string(),
+            "printer \"bambu-a1\" is Fdm, but this print was entered by hand as Resin"
         );
     }
 

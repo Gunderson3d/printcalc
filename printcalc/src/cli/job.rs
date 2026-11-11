@@ -1,4 +1,5 @@
-//! The default command: cost a sliced file or a saved job `.toml`.
+//! The default command: cost a sliced file, a saved job `.toml`, or a
+//! print entered by hand with `--print-time` and `--grams`/`--ml`.
 //!
 //! This is where auto-detection meets explicit flags. A sliced file is
 //! parsed, [`libprintcalc::auto_job`] guesses the printer and each
@@ -20,8 +21,8 @@ use clap::ValueEnum;
 use libprintcalc::formats::slice_summary::{SliceSummary, SlotUsage};
 use libprintcalc::model::cost::CostBreakdown;
 use libprintcalc::model::filament::MaterialProfile;
-use libprintcalc::model::job::{HardwareItem, Job};
-use libprintcalc::model::printer::PrinterProfile;
+use libprintcalc::model::job::{HardwareItem, Job, SINGLE_MATERIAL_SLOT};
+use libprintcalc::model::printer::{PrinterKind, PrinterProfile};
 
 use crate::interactive;
 use crate::ops::{self, JobTier, NewJobParams, ProfileChoice};
@@ -50,8 +51,24 @@ impl From<JobType> for JobTier {
     }
 }
 
+/// What the job is costed from.
+pub enum JobInput {
+    /// A sliced file, or a job `.toml` (told apart by extension).
+    File(PathBuf),
+    /// No file: the print time and material amounts typed as flags.
+    Manual(ManualPrint),
+}
+
+/// `--print-time`, `--grams` and `--ml`, unparsed. At least one is set;
+/// whatever's missing is prompted for (or, under `--no-input`, an error).
+pub struct ManualPrint {
+    pub print_time: Option<String>,
+    pub grams: Option<String>,
+    pub ml: Option<String>,
+}
+
 pub struct JobInvocation {
-    pub file: PathBuf,
+    pub input: JobInput,
     /// Defaults to the output file's stem, or the input file's stem if no
     /// `-o`. Ignored when calc'ing an existing job (the name's already
     /// baked into the file).
@@ -159,12 +176,15 @@ fn currency_symbol() -> String {
 }
 
 pub fn run(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
-    if inv.file.extension().and_then(|e| e.to_str()) == Some("toml") {
+    if let JobInput::File(file) = &inv.input
+        && file.extension().and_then(|e| e.to_str()) == Some("toml")
+    {
+        let file = file.clone();
         if let Some(job_type) = inv.retier {
             let output = inv
                 .output
                 .ok_or("--retier needs -o/--output to save the re-tiered job to")?;
-            let retiered = ops::retier_job(&inv.file, job_type.into())?;
+            let retiered = ops::retier_job(&file, job_type.into())?;
             ops::save_job(&retiered, &output)?;
             eprintln!("wrote {}", output.display());
             return Ok(());
@@ -174,25 +194,29 @@ pub fn run(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
         // pricing just one plate out of a Bundled job saved with "all",
         // without needing the original sliced file).
         let overrides = Overrides::parse(&inv)?;
-        let mut job = ops::load_job(&inv.file)?;
+        let mut job = ops::load_job(&file)?;
         overrides.apply(&mut job);
         if let Some(output) = &inv.output {
             ops::save_job(&job, output)?;
             eprintln!("wrote {}", output.display());
         }
-        let breakdown = ops::calc_job_at(&job, &inv.file)?;
+        let breakdown = ops::calc_job_at(&job, &file)?;
         print_result(&breakdown, inv.format, inv.color, &currency_symbol());
         return Ok(());
     }
     new_job_flow(inv)
 }
 
-/// `file` isn't a `.toml` — parse it as a sliced file and build a job. With
-/// `-o`, save it first. Either way the cost is then resolved and shown,
-/// so saving a quote and seeing it are one step. The "wrote" note goes to
-/// stderr so `--format json` stays clean on stdout.
+/// Not a `.toml` — parse the sliced file (or build the summary from the
+/// hand-entered flags) and build a job. With `-o`, save it first. Either
+/// way the cost is then resolved and shown, so saving a quote and seeing
+/// it are one step. The "wrote" note goes to stderr so `--format json`
+/// stays clean on stdout.
 fn new_job_flow(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
-    let slice = ops::parse_slice(&inv.file)?;
+    let (slice, slice_path) = match &inv.input {
+        JobInput::File(path) => (ops::parse_slice(path)?, Some(path.clone())),
+        JobInput::Manual(manual) => (manual_slice(manual, inv.interactive)?, None),
+    };
     let overrides = Overrides::parse(&inv)?;
     let currency = currency_symbol();
 
@@ -205,12 +229,13 @@ fn new_job_flow(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
 
     // What the sliced file itself says about the setup. Explicit flags
     // still win; this only fills in what wasn't passed, and only reports
-    // on what it might actually be used for.
-    let detected = (!inv.no_detect).then(|| ops::detect_profiles(&slice));
-    if let Some(detected) = &detected {
+    // on what it might actually be used for. Typed-in numbers say nothing
+    // about the setup, so there's nothing to detect.
+    let detected = (!inv.no_detect && slice_path.is_some()).then(|| ops::detect_profiles(&slice));
+    if let (Some(detected), Some(path)) = (&detected, &slice_path) {
         let covered = |slot: &str| inv.filament.is_some() || mapped.contains_key(slot);
         print_detected(
-            &inv.file,
+            path,
             &slice,
             detected,
             inv.printer.is_none(),
@@ -241,16 +266,20 @@ fn new_job_flow(inv: JobInvocation) -> Result<(), Box<dyn Error>> {
         inv.output
             .as_ref()
             .and_then(|p| p.file_stem())
-            .or_else(|| inv.file.file_stem())
+            .or_else(|| slice_path.as_ref().and_then(|p| p.file_stem()))
             .and_then(|s| s.to_str())
-            .unwrap_or("job")
+            .unwrap_or(if slice_path.is_some() {
+                "job"
+            } else {
+                "manual"
+            })
             .to_string()
     });
 
     let outcome = ops::new_job(
         NewJobParams {
             name,
-            slice_path: inv.file.clone(),
+            slice_path,
             printer,
             filaments,
             default_filament: inv.default_filament.map(ProfileChoice::Named),
@@ -479,6 +508,131 @@ fn resolve_filaments(
         map.insert(slot.slot_id.clone(), ProfileChoice::Named(name));
     }
     Ok(map)
+}
+
+/// The summary for a print entered by hand: `--print-time`, plus
+/// `--grams` for FDM or `--ml` for resin. Missing values are prompted
+/// for, or under `--no-input` are an error naming the flag.
+fn manual_slice(m: &ManualPrint, interactive_mode: bool) -> Result<SliceSummary, Box<dyn Error>> {
+    let time = interactive::require_string(
+        m.print_time.clone(),
+        "print-time",
+        "Print time (e.g. 1h30m)",
+        interactive_mode,
+    )?;
+    let seconds = parse_print_time(&time)?;
+    let (kind, amounts) = match (&m.grams, &m.ml) {
+        (Some(_), Some(_)) => {
+            return Err(
+                "--grams and --ml can't be combined: a print is filament (grams) or resin (ml)"
+                    .into(),
+            );
+        }
+        (Some(grams), None) => (PrinterKind::Fdm, parse_amounts(grams, "--grams", "g")?),
+        (None, Some(ml)) => (PrinterKind::Resin, parse_amounts(ml, "--ml", "ml")?),
+        (None, None) if !interactive_mode => {
+            return Err(
+                "missing --grams (filament) or --ml (resin) for the material used (rerun without --no-input to be prompted)"
+                    .into(),
+            );
+        }
+        (None, None) => {
+            let grams = interactive::require_string(
+                None,
+                "grams",
+                "Filament used in grams (e.g. 50, or 1=50,2=12.5; for resin rerun with --ml)",
+                true,
+            )?;
+            (PrinterKind::Fdm, parse_amounts(&grams, "--grams", "g")?)
+        }
+    };
+    Ok(SliceSummary::manual(kind, seconds, amounts))
+}
+
+/// `--print-time`: `1h30m`, `45m`, `90s`, `1.5h` (units combine), or
+/// `H:MM[:SS]`. Returns seconds.
+fn parse_print_time(s: &str) -> Result<f64, Box<dyn Error>> {
+    let invalid = || -> Box<dyn Error> {
+        format!("invalid --print-time {s:?}, expected e.g. 1h30m, 45m, 90s or 1:30").into()
+    };
+    let text = s.trim().to_ascii_lowercase();
+    let seconds = if text.contains(':') {
+        let parts = text
+            .split(':')
+            .map(|p| p.trim().parse::<f64>().map_err(|_parse_err| invalid()))
+            .collect::<Result<Vec<f64>, _>>()?;
+        match parts.as_slice() {
+            [h, m] => h * 3600.0 + m * 60.0,
+            [h, m, sec] => h * 3600.0 + m * 60.0 + sec,
+            _ => return Err(invalid()),
+        }
+    } else {
+        let mut total = 0.0;
+        let mut number = String::new();
+        let mut any_unit = false;
+        for c in text.chars() {
+            let unit = match c {
+                '0'..='9' | '.' => {
+                    number.push(c);
+                    continue;
+                }
+                c if c.is_whitespace() => continue,
+                'h' => 3600.0,
+                'm' => 60.0,
+                's' => 1.0,
+                _ => return Err(invalid()),
+            };
+            let value: f64 = number.parse().map_err(|_parse_err| invalid())?;
+            total += value * unit;
+            number.clear();
+            any_unit = true;
+        }
+        // A bare number has no unit to say whether it's hours or minutes.
+        if !number.is_empty() || !any_unit {
+            return Err(invalid());
+        }
+        total
+    };
+    if !seconds.is_finite() || seconds < 0.0 {
+        return Err(invalid());
+    }
+    Ok(seconds)
+}
+
+/// `--grams`/`--ml`: one amount for a single-material print (`50`), or
+/// `slot=amount,...` per slot (`1=50,2=12.5`). A trailing unit (`50g`,
+/// `12ml`) is accepted.
+fn parse_amounts(s: &str, flag: &str, unit: &str) -> Result<Vec<(String, f64)>, Box<dyn Error>> {
+    let amount = |v: &str| -> Result<f64, Box<dyn Error>> {
+        let n: f64 = v
+            .trim()
+            .trim_end_matches(unit)
+            .trim()
+            .parse()
+            .map_err(|_parse_err| format!("invalid {flag} amount {v:?}"))?;
+        if !n.is_finite() || n < 0.0 {
+            return Err(format!("invalid {flag} amount {v:?}, must be 0 or more").into());
+        }
+        Ok(n)
+    };
+    if !s.contains('=') {
+        return Ok(vec![(SINGLE_MATERIAL_SLOT.to_string(), amount(s)?)]);
+    }
+    let mut amounts: Vec<(String, f64)> = Vec::new();
+    for pair in s.split(',') {
+        let (slot, value) = pair
+            .split_once('=')
+            .ok_or_else(|| format!("invalid {flag} entry {pair:?}, expected slot=amount"))?;
+        let slot = slot.trim();
+        if slot.is_empty() {
+            return Err(format!("invalid {flag} entry {pair:?}, expected slot=amount").into());
+        }
+        if amounts.iter().any(|(s, _)| s == slot) {
+            return Err(format!("{flag} lists slot {slot} twice").into());
+        }
+        amounts.push((slot.to_string(), amount(value)?));
+    }
+    Ok(amounts)
 }
 
 /// `--plate`: absent, `"all"`, or a plate number.
@@ -815,6 +969,77 @@ fn paint(text: &str, code: &str, enabled: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn seconds(s: &str) -> f64 {
+        parse_print_time(s).unwrap()
+    }
+
+    #[test]
+    fn print_time_accepts_units_and_clock_forms() {
+        for (text, want) in [
+            ("1h30m", 5400.0),
+            ("45m", 2700.0),
+            ("90s", 90.0),
+            ("1.5h", 5400.0),
+            ("2H 5M 10S", 7510.0),
+            ("1:30", 5400.0),
+            ("0:20:07", 1207.0),
+        ] {
+            assert!((seconds(text) - want).abs() < 1e-9, "{text}");
+        }
+    }
+
+    #[test]
+    fn print_time_rejects_unitless_and_junk() {
+        for text in ["90", "", "1h30", "abc", "1:2:3:4", "-5m", "1x"] {
+            assert!(parse_print_time(text).is_err(), "{text:?} should fail");
+        }
+    }
+
+    #[test]
+    fn amounts_take_one_number_or_a_slot_map() {
+        assert_eq!(
+            parse_amounts("50g", "--grams", "g").unwrap(),
+            [(SINGLE_MATERIAL_SLOT.to_string(), 50.0)]
+        );
+        assert_eq!(
+            parse_amounts("1=50, 2 = 12.5", "--grams", "g").unwrap(),
+            [("1".to_string(), 50.0), ("2".to_string(), 12.5)]
+        );
+        assert_eq!(
+            parse_amounts("12ml", "--ml", "ml").unwrap(),
+            [(SINGLE_MATERIAL_SLOT.to_string(), 12.0)]
+        );
+    }
+
+    #[test]
+    fn amounts_reject_bad_entries() {
+        for text in ["-1", "lots", "1=5,1=6", "=5", "1=", "1=5,2"] {
+            assert!(
+                parse_amounts(text, "--grams", "g").is_err(),
+                "{text:?} should fail"
+            );
+        }
+    }
+
+    #[test]
+    fn manual_slice_needs_its_flags_under_no_input() {
+        let manual = |t: Option<&str>, g: Option<&str>, ml: Option<&str>| ManualPrint {
+            print_time: t.map(String::from),
+            grams: g.map(String::from),
+            ml: ml.map(String::from),
+        };
+        let err = manual_slice(&manual(None, Some("50"), None), false).unwrap_err();
+        assert!(err.to_string().contains("--print-time"), "{err}");
+        let err = manual_slice(&manual(Some("1h"), None, None), false).unwrap_err();
+        assert!(err.to_string().contains("--grams"), "{err}");
+
+        let resin = manual_slice(&manual(Some("1h"), None, Some("1=10,2=5")), false).unwrap();
+        assert_eq!(
+            resin,
+            SliceSummary::manual(PrinterKind::Resin, 3600.0, [("1", 10.0), ("2", 5.0)])
+        );
+    }
 
     #[test]
     fn parses_name_price_units() {

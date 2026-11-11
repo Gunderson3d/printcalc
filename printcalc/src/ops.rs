@@ -242,8 +242,10 @@ impl<T> From<String> for ProfileChoice<T> {
 pub struct NewJobParams {
     /// A free-form label for the job.
     pub name: String,
-    /// The sliced file to parse and cost against.
-    pub slice_path: PathBuf,
+    /// The sliced file the summary came from, kept as the job's source
+    /// below the Bundled tier. `None` for a print entered by hand, whose
+    /// summary is always embedded since there's no file to point at.
+    pub slice_path: Option<PathBuf>,
     /// Which printer profile to price wear and electricity against.
     pub printer: ProfileChoice<PrinterProfile>,
     /// slot_id -> filament profile. The common single-material case
@@ -394,9 +396,9 @@ pub fn new_job(params: NewJobParams, summary: SliceSummary) -> Result<NewJobOutc
         .default_filament
         .map(|choice| resolve_choice(choice, params.tier, show_filament))
         .transpose()?;
-    let source = match params.tier {
-        JobTier::Bundled => JobSource::Embedded(summary.clone()),
-        JobTier::Default | JobTier::Full => JobSource::Path(params.slice_path),
+    let source = match (params.tier, params.slice_path) {
+        (JobTier::Default | JobTier::Full, Some(path)) => JobSource::Path(path),
+        (JobTier::Bundled, _) | (_, None) => JobSource::Embedded(summary.clone()),
     };
 
     let mut labor = LaborCost::new(params.labor_minutes);
@@ -693,7 +695,7 @@ mod tests {
         let outcome = new_job(
             NewJobParams {
                 name: "test-print".into(),
-                slice_path: sl1_fixture_path(),
+                slice_path: Some(sl1_fixture_path()),
                 printer: "sl1-printer".to_string().into(),
                 filaments: HashMap::from([(
                     SINGLE_MATERIAL_SLOT.to_string(),
@@ -738,7 +740,7 @@ mod tests {
         let outcome = new_job(
             NewJobParams {
                 name: "test-print".into(),
-                slice_path: sl1_fixture_path(),
+                slice_path: Some(sl1_fixture_path()),
                 printer: "sl1-printer".to_string().into(),
                 filaments: HashMap::from([(
                     SINGLE_MATERIAL_SLOT.to_string(),
@@ -761,6 +763,44 @@ mod tests {
 
         assert!(outcome.plate_selection_ignored);
         assert_eq!(outcome.job.plate_selection, None);
+    }
+
+    /// A print entered by hand has no file to link, so even a Default-tier
+    /// job embeds its summary, and it survives a save/load round trip.
+    #[test]
+    fn manual_job_embeds_its_summary_at_every_tier() {
+        let summary =
+            SliceSummary::manual(PrinterKind::Resin, 3600.0, [(SINGLE_MATERIAL_SLOT, 10.0)]);
+        let outcome = new_job(
+            NewJobParams {
+                name: "by-hand".into(),
+                slice_path: None,
+                printer: "sl1-printer".to_string().into(),
+                filaments: HashMap::from([(
+                    SINGLE_MATERIAL_SLOT.to_string(),
+                    "resin-grey".to_string().into(),
+                )]),
+                plate_selection: None,
+                labor_minutes: 0.0,
+                labor_rate_per_hour: None,
+                default_filament: None,
+                quantity: 1,
+                hardware: Vec::new(),
+                electricity_cost_per_kwh_override: None,
+                margin_percentages_override: None,
+                material_efficiency_factor_override: None,
+                tier: JobTier::Default,
+            },
+            summary.clone(),
+        )
+        .unwrap();
+        assert_eq!(outcome.job.source, JobSource::Embedded(summary.clone()));
+
+        let path = temp_job_path("manual");
+        save_job(&outcome.job, &path).unwrap();
+        let loaded = load_job(&path).unwrap();
+        remove_file_if_present(&path);
+        assert_eq!(loaded.source, JobSource::Embedded(summary));
     }
 
     /// The resin printer every test here prices against: a 400 machine
@@ -900,7 +940,7 @@ mod tests {
         let outcome = new_job(
             NewJobParams {
                 name: "test-print".into(),
-                slice_path: sl1_fixture_path(),
+                slice_path: Some(sl1_fixture_path()),
                 printer: "sl1-printer".to_string().into(),
                 filaments: HashMap::from([(
                     SINGLE_MATERIAL_SLOT.to_string(),

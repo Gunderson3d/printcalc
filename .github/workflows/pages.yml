@@ -63,6 +63,25 @@ jobs:
           cp Testfiles/Shape-Box.sl1s site/examples/shape-box.sl1s
           touch site/.nojekyll
 
+      # Cloudflare Web Analytics (cookieless page views). The beacon is
+      # added only to the published page, never to the source in
+      # printcalc-wasm/demo/, so local builds send nothing. The site token
+      # is public (it ships in the page); the repository variable
+      # CF_WEB_ANALYTICS_TOKEN overrides it, and forks get no default.
+      - name: Add Cloudflare Web Analytics
+        env:
+          CF_TOKEN: ${{ vars.CF_WEB_ANALYTICS_TOKEN || (github.repository == 'gunderson3d/printcalc' && '283a2b2ed2aa4c368463c7fd6f04161f' || '') }}
+        run: |
+          if [ -z "$CF_TOKEN" ]; then echo "no analytics token; skipping"; exit 0; fi
+          case "$CF_TOKEN" in
+            *[!0-9a-fA-F]*) echo "CF_WEB_ANALYTICS_TOKEN must be hex" >&2; exit 1 ;;
+          esac
+          beacon="<meta name="google-site-verification" content="RvA2aHcGXCJpjc_MmpMcu4K-mz4jVQEozX-iMLBgAvw" /><!-- Cloudflare Web Analytics --><script type=\"module\" src=\"https://static.cloudflareinsights.com/beacon.min.js\" data-cf-beacon='{\"token\": \"$CF_TOKEN\"}'></script><!-- End Cloudflare Web Analytics -->"
+          awk -v b="$beacon" '/<\/body>/ && !done { print b; done = 1 } { print }' \
+            site/index.html > site/index.html.tmp
+          mv site/index.html.tmp site/index.html
+          grep -q cloudflareinsights site/index.html
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

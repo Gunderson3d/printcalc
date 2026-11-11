@@ -1,8 +1,9 @@
 //! WASM bindings over `libprintcalc` for in-browser use, mirroring the
 //! lib's crate-root API one-for-one for everything that makes sense
-//! without a filesystem: `parse_slice_bytes`, `parse_job`, `new_job`, and
-//! `calculate`, plus the `calc_job` one-shot (TOML in, breakdown out),
-//! `job_to_toml` (bundled-tier export),
+
+//! without a filesystem: `parse_slice_bytes`, `manual_slice`, `parse_job`, `new_job`, and
+//! `calculate`, plus the `calc_job` one-shot (TOML in, breakdown out)
+
 //! and the built-in preset listings. The lib's `disk` helpers
 //! (`read_*`, `Job::slice_summary` on a `Path` source) have no counterpart
 //! here — a browser has no filesystem.
@@ -22,13 +23,13 @@
 use wasm_bindgen::prelude::*;
 
 use libprintcalc::{
-    CostDefaults, HardwareItem, Job, JobSource, JobTier, LaborCost, MaterialProfile,
+    CostDefaults, HardwareItem, Job, JobSource, LaborCost, MaterialProfile, PrinterKind,
     PrinterProfile, ProfileRef, SliceSummary, auto_job as lib_auto_job, builtin,
     calculate as lib_calculate, new_job as lib_new_job, parse_job as lib_parse_job,
     parse_material as lib_parse_material, parse_printer as lib_parse_printer,
     parse_slice_bytes as lib_parse_slice_bytes,
 };
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 #[wasm_bindgen]
 pub fn printcalc_wasm_version() -> String {
@@ -56,6 +57,25 @@ pub fn builtin_filaments() -> Result<String, JsError> {
 pub fn parse_slice_bytes(bytes: &[u8], filename: &str) -> Result<String, JsError> {
     let summary =
         lib_parse_slice_bytes(bytes, filename).map_err(|e| JsError::new(&e.to_string()))?;
+    serde_json::to_string(&summary).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Mirrors `libprintcalc::SliceSummary::manual`: a `SliceSummary` for a
+/// print typed in by hand instead of read from a sliced file, returned as
+/// JSON. `process` is `"fdm"` or `"resin"`; `amounts_json` maps slot id
+/// to grams (FDM) or millilitres (resin), e.g. `{"1": 50, "2": 12.5}`.
+/// A negative or non-finite time or amount counts as zero.
+#[wasm_bindgen]
+pub fn manual_slice(
+    process: &str,
+    print_time_seconds: f64,
+    amounts_json: &str,
+) -> Result<String, JsError> {
+    let kind: PrinterKind = serde_json::from_value(serde_json::Value::from(process))
+        .map_err(|e| JsError::new(&format!("process {process:?}: {e}")))?;
+    let amounts: BTreeMap<String, f64> = serde_json::from_str(amounts_json)
+        .map_err(|e| JsError::new(&format!("amounts JSON: {e}")))?;
+    let summary = SliceSummary::manual(kind, print_time_seconds, amounts);
     serde_json::to_string(&summary).map_err(|e| JsError::new(&e.to_string()))
 }
 

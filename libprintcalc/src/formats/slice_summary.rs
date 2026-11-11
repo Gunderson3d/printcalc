@@ -16,6 +16,8 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::model::printer::PrinterKind;
+
 /// Which slicer/format a [`SliceSummary`] was extracted from.
 ///
 /// `#[non_exhaustive]`: more formats land over time, and each is a new
@@ -37,6 +39,25 @@ pub enum SourceFormat {
     /// PrusaSlicer resin `.sl1`/`.sl1s`.
     #[serde(rename = "prusa-sl1")]
     PrusaSl1,
+    /// No sliced file: an FDM print time and filament grams typed in by
+    /// hand. See [`SliceSummary::manual`].
+    #[serde(rename = "manual-fdm")]
+    ManualFdm,
+    /// No sliced file: a resin print time and millilitres typed in by
+    /// hand. See [`SliceSummary::manual`].
+    #[serde(rename = "manual-resin")]
+    ManualResin,
+}
+
+impl SourceFormat {
+    /// The hand-entered format for a process: [`SourceFormat::ManualFdm`]
+    /// or [`SourceFormat::ManualResin`].
+    pub fn manual(kind: PrinterKind) -> Self {
+        match kind {
+            PrinterKind::Fdm => SourceFormat::ManualFdm,
+            PrinterKind::Resin => SourceFormat::ManualResin,
+        }
+    }
 }
 
 /// File-wide identity a slicer recorded about the setup that produced a
@@ -142,6 +163,47 @@ impl SliceSummary {
             meta: SliceMeta::default(),
             plates,
         }
+    }
+
+    /// A summary typed in by hand rather than parsed from a sliced file:
+    /// one plate, `print_time_seconds` long, using `amount` of each
+    /// `(slot_id, amount)` — grams for [`PrinterKind::Fdm`], millilitres
+    /// for [`PrinterKind::Resin`]. The format is
+    /// [`SourceFormat::manual`]`(kind)`, so costing checks the printer and
+    /// materials against that process as it would for a file.
+    ///
+    /// A negative or non-finite time or amount counts as zero, and so does
+    /// the slot it belongs to: it stays in the summary but, like an unused
+    /// tray in a file, isn't one of [`Self::slots`].
+    ///
+    /// ```
+    /// use libprintcalc::{PrinterKind, SliceSummary, SourceFormat};
+    ///
+    /// let s = SliceSummary::manual(PrinterKind::Fdm, 3600.0, [("1", 50.0), ("2", 0.0)]);
+    /// assert_eq!(s.source_format, SourceFormat::ManualFdm);
+    /// assert_eq!(s.distinct_filament_slots(), ["1"]);
+    /// ```
+    pub fn manual<S: Into<String>>(
+        kind: PrinterKind,
+        print_time_seconds: f64,
+        amounts: impl IntoIterator<Item = (S, f64)>,
+    ) -> Self {
+        let non_negative = |v: f64| if v.is_finite() && v > 0.0 { v } else { 0.0 };
+        let usage = amounts
+            .into_iter()
+            .map(|(slot, amount)| match kind {
+                PrinterKind::Fdm => FilamentUsage::grams(slot, non_negative(amount)),
+                PrinterKind::Resin => FilamentUsage::ml(slot, non_negative(amount)),
+            })
+            .collect();
+        SliceSummary::new(
+            SourceFormat::manual(kind),
+            vec![PlateSummary::new(
+                1,
+                non_negative(print_time_seconds),
+                usage,
+            )],
+        )
     }
 
     /// Sets the file-wide slicer/printer identity.
@@ -492,6 +554,46 @@ mod tests {
             printer_model: None,
             layer_height: None,
             extra: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn manual_summary_is_one_plate_in_the_process_unit() {
+        let s = SliceSummary::manual(PrinterKind::Resin, 90.0, [("1", 12.5), ("2", 3.0)]);
+        assert_eq!(s.source_format, SourceFormat::ManualResin);
+        assert_eq!(s.plates.len(), 1);
+        let plate = &s.plates[0];
+        assert_eq!(plate.plate_index, 1);
+        assert!((plate.print_time_seconds - 90.0).abs() < 1e-9);
+        assert_eq!(
+            plate.filament_usage,
+            vec![FilamentUsage::ml("1", 12.5), FilamentUsage::ml("2", 3.0)]
+        );
+    }
+
+    #[test]
+    fn manual_summary_zeroes_bad_numbers() {
+        let s = SliceSummary::manual(
+            PrinterKind::Fdm,
+            f64::NAN,
+            [("1", -4.0), ("2", f64::INFINITY), ("3", 7.0)],
+        );
+        assert!(s.total_print_time_seconds().abs() < 1e-9);
+        assert_eq!(s.distinct_filament_slots(), ["3"]);
+        assert_eq!(
+            s.plates[0].filament_usage[0],
+            FilamentUsage::grams("1", 0.0)
+        );
+    }
+
+    #[test]
+    fn manual_formats_round_trip_through_serde() {
+        for (format, wire) in [
+            (SourceFormat::ManualFdm, "\"manual-fdm\""),
+            (SourceFormat::ManualResin, "\"manual-resin\""),
+        ] {
+            assert_eq!(serde_json::to_string(&format).unwrap(), wire);
+            assert_eq!(serde_json::from_str::<SourceFormat>(wire).unwrap(), format);
         }
     }
 
