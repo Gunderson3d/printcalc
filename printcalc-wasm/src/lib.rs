@@ -23,7 +23,7 @@
 use wasm_bindgen::prelude::*;
 
 use libprintcalc::{
-    CostDefaults, HardwareItem, Job, JobSource, LaborCost, MaterialProfile, PrinterKind,
+    CostDefaults, HardwareItem, Job, JobSource, JobTier, LaborCost, MaterialProfile, PrinterKind,
     PrinterProfile, ProfileRef, SliceSummary, auto_job as lib_auto_job, builtin,
     calculate as lib_calculate, new_job as lib_new_job, parse_job as lib_parse_job,
     parse_material as lib_parse_material, parse_printer as lib_parse_printer,
