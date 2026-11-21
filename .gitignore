@@ -2,4 +2,5 @@
 /Testfiles/unziped
 /printcalc-wasm/demo/pkg
 *.3mf
+!Testfiles/*.gcode.3mf
 test.toml

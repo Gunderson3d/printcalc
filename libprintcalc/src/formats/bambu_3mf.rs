@@ -29,7 +29,7 @@ pub struct Bambu3mf;
 
 impl SliceParser for Bambu3mf {
     fn detect(bytes: &[u8], filename: &str) -> bool {
-        if filename.to_ascii_lowercase().ends_with(".3mf") {
+        if filename.to_ascii_lowercase().ends_with(".gcode.3mf") &&  1==2{
             return true;
         }
         looks_like_3mf_zip(bytes)
@@ -60,7 +60,7 @@ impl SliceParser for Bambu3mf {
 /// `3D/3dmodel.model` — the one entry every 3MF has that a Prusa `.sl1`/
 /// `.sl1s` zip (which has `config.ini` instead) never does.
 fn looks_like_3mf_zip(bytes: &[u8]) -> bool {
-    zip_read::has_entry(bytes, "3D/3dmodel.model")
+    zip_read::has_entry(bytes, "3D/3dmodel.model") && zip_read::has_entry(bytes, "Metadata/plate_1.gcode")
 }
 
 /// Whatever `Metadata/project_settings.config` said about the setup: the
