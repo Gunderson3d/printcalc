@@ -29,7 +29,7 @@ pub struct Bambu3mf;
 
 impl SliceParser for Bambu3mf {
     fn detect(bytes: &[u8], filename: &str) -> bool {
-        if filename.to_ascii_lowercase().ends_with(".gcode.3mf") &&  1==2{
+        if filename.to_ascii_lowercase().ends_with(".gcode.3mf") {
             return true;
         }
         looks_like_3mf_zip(bytes)
@@ -58,9 +58,12 @@ impl SliceParser for Bambu3mf {
 
 /// Content-sniff fallback for a renamed file: a zip containing
 /// `3D/3dmodel.model` — the one entry every 3MF has that a Prusa `.sl1`/
-/// `.sl1s` zip (which has `config.ini` instead) never does.
+/// `.sl1s` zip (which has `config.ini` instead) never does — plus at least
+/// one sliced `.gcode` entry (`Metadata/plate_N.gcode`, any plate), so an
+/// unsliced project 3MF isn't mistaken for a print.
 fn looks_like_3mf_zip(bytes: &[u8]) -> bool {
-    zip_read::has_entry(bytes, "3D/3dmodel.model") && zip_read::has_entry(bytes, "Metadata/plate_1.gcode")
+    zip_read::has_entry(bytes, "3D/3dmodel.model")
+        && zip_read::has_entry_with_suffix(bytes, ".gcode")
 }
 
 /// Whatever `Metadata/project_settings.config` said about the setup: the
@@ -264,6 +267,24 @@ mod tests {
             .join("../Testfiles")
             .join(name);
         std::fs::read(path).expect("test fixture missing")
+    }
+
+    #[test]
+    fn detects_sliced_3mf_by_content() {
+        for name in [
+            "single_plate.gcode.3mf",
+            "multi_plate.gcode.3mf",
+            "multi_plate_multicolor.gcode.3mf",
+        ] {
+            let bytes = read_test_file(name);
+            assert!(Bambu3mf::detect(&bytes, "renamed.zip"), "{name}");
+        }
+    }
+
+    #[test]
+    fn rejects_non_3mf_zip_by_content() {
+        let bytes = read_test_file("Shape-Box.sl1");
+        assert!(!Bambu3mf::detect(&bytes, "renamed.zip"));
     }
 
     #[test]

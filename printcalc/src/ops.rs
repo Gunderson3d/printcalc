@@ -44,7 +44,10 @@ impl fmt::Display for OpsError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             OpsError::Io(e) => write!(f, "io error: {e}"),
-            OpsError::Parse(ParseError::NotThisFormat) => write!(f, "unrecognized slice file: expected a Bambu .gcode.3mf, .gcode, Prusa .bgcode or .sl1"),
+            OpsError::Parse(ParseError::NotThisFormat) => write!(
+                f,
+                "unrecognized slice file: expected a Bambu .gcode.3mf, .gcode, Prusa .bgcode or .sl1"
+            ),
             OpsError::Parse(e) => write!(f, "{e}"),
             OpsError::Calc(e) => write!(f, "{e}"),
             OpsError::Library(e) => write!(f, "{e}"),
