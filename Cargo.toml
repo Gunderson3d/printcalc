@@ -2,6 +2,18 @@
 resolver = "2"
 members = ["libprintcalc", "printcalc", "printcalc-wasm"]
 
+# Shared by every crate through `field.workspace = true`; bump the version
+# here (and in `workspace.dependencies` below) to release all crates together.
+[workspace.package]
+version = "0.2.1"
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/Gunderson3d/printcalc"
+homepage = "https://gunderson3d.github.io/printcalc/"
+
+[workspace.dependencies]
+libprintcalc = { path = "libprintcalc", version = "0.2", default-features = false }
+
 [workspace.lints.clippy]
 # Don't Panic - prevent panics from unwraps and unsafe slicing or indexing
 string_slice = "warn"

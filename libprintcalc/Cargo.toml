@@ -1,12 +1,12 @@
 [package]
 name = "libprintcalc"
-version = "0.2.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 description = "Library for calculating 3D print job costs (material, print time, printer wear, electricity, labor, hardware) from sliced-file output."
 readme = "README.md"
-license = "Apache-2.0"
-repository = "https://github.com/Gunderson3d/printcalc"
-homepage = "https://github.com/Gunderson3d/printcalc"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 keywords = ["3d-printing", "gcode", "3mf", "cost"]
 categories = ["parser-implementations"]
 

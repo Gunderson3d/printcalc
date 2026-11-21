@@ -242,7 +242,7 @@ checksum = "ce5d3ddc6d3fa000eb1536d85e147bfe31aacaba692ed6a876f95cb7c855be78"
 
 [[package]]
 name = "libprintcalc"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "binarygcode",
  "miniz_oxide 0.9.1",
@@ -317,7 +317,7 @@ checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "printcalc"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "clap",
  "clap_complete",
@@ -331,7 +331,7 @@ dependencies = [
 
 [[package]]
 name = "printcalc-wasm"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "libprintcalc",
  "serde",
