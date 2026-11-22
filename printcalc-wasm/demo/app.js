@@ -852,7 +852,7 @@ async function main() {
     const batch = b.quantity > 1;
 
     const line = (label, right, cls = '') => el('div', { class: `flex items-baseline ${cls}` },
-      el('span', { class: 'whitespace-pre', text: label }), el('span', { class: 'leader' }), el('span', { class: 'whitespace-nowrap', text: right }));
+      el('span', { class: 'whitespace-pre-wrap break-words min-w-0', text: label }), el('span', { class: 'leader' }), el('span', { class: 'whitespace-nowrap', text: right }));
     const heading = (t) => el('div', { class: 'text-muted mt-4 mb-1 first:mt-0', text: t });
 
     if (b.plate_breakdown.length > 1) {
