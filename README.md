@@ -8,6 +8,9 @@ into a spreadsheet.
 
 ```console
 $ printcalc "PlayBook'd Billiards.gcode.3mf"
+detected from PlayBook'd Billiards.gcode.3mf
+  slicer:   BambuStudio 02.08.02.61
+
 plates
   Plate 1........................... 4h41m35s · 272.32g
   Plate 2........................... 2h26m34s · 114.89g
@@ -27,19 +30,21 @@ material breakdown
 
 summary
   Material.......................... $36.65
-  Printer wear...................... $0.13
-  Electricity....................... $0.68
+  Printer wear...................... $2.28
+  Electricity....................... $0.80
   Labor............................. $0.00
   Hardware.......................... $0.00
   ─────────────────────────────────────
-  TOTAL............................. $37.45
+  TOTAL............................. $39.73
 
-  sale price @ 50% / 60% / 70% margin:  $74.90  $93.62  $124.83
+  sale price @ 50% / 60% / 70% margin:  $79.46  $99.33  $132.44
+
 ```
 
 One argument, no configuration. Sliced files record which printer they
 were sliced for and what was in each slot, so `printcalc` starts from
 what the file already knows and asks you only for what it can't.  
+Supports gcode, bgcode, gcode.3mf, and sl1/sl1s  
 > [!NOTE]  
 > Only tested with PrusaSlicer, OrcaSlicer, and Bambu Studio files
 ## Install
