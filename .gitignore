@@ -4,3 +4,4 @@
 *.3mf
 !Testfiles/*.gcode.3mf
 test.toml
+/.idea

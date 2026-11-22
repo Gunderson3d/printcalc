@@ -83,8 +83,6 @@ mod tests {
         assert!(summary.plates[0].print_time_seconds > 0.0);
     }
 
-    /// Profiles round-trip through the same TOML the CLI's library saves,
-    /// and a missing file surfaces as `Error::Io`.
     /// Test cleanup that stays honest: a missing path is fine, any other
     /// failure is a real problem worth failing the test over.
     fn remove_dir_if_present(path: &Path) {
@@ -95,6 +93,8 @@ mod tests {
         }
     }
 
+    /// Profiles round-trip through the same TOML the CLI's library saves,
+    /// and a missing file surfaces as `Error::Io`.
     #[test]
     fn read_profiles_and_job_from_disk() {
         let dir = std::env::temp_dir().join("printcalc-test-disk");
