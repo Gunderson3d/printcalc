@@ -7,31 +7,41 @@ hardware — read out of the file your slicer already produced, not typed
 into a spreadsheet.
 
 ```console
-$ printcalc Cube_0.2mm_PLA_Prusa\ MINI_20m7s.gcode
-detected from Cube_0.2mm_PLA_Prusa MINI_20m7s.gcode
-  slicer:   OrcaSlicer 2.4.2
-  printer:  Prusa MINI -> prusa-mini-plus (guess)
-  slot 1 (Generic PLA @System #26A69A) -> priced from the file at $20.00/kg
+$ printcalc "PlayBook'd Billiards.gcode.3mf"
+plates
+  Plate 1........................... 4h41m35s · 272.32g
+  Plate 2........................... 2h26m34s · 114.89g
+  Plate 3........................... 3h43m28s · 248.38g
+  Plate 4........................... 12h49m38s · 351.50g
+  Plate 5........................... 1h53m26s · 98.50g
+  Plate 6........................... 30m30s · 10.20g
+  Plate 7........................... 44m05s · 6.14g
+  Plate 8........................... 1h21m58s · 10.90g
+  Plate 9........................... 1h10m24s · 11.72g
+  ─────────────────────────────────────
+  Combined.......................... 29h21m38s · 1124.55g
 
 material breakdown
-  Generic PLA @System.............. 4.65g @ $20.00/kg = $0.09
+  Generic PLA @BBL P2S.............. 391.31g @ $20.00/kg = $7.83
+  bambu-pla-matte................... 1153.21g @ $24.99/kg = $28.82
 
 summary
-  Material......................... $0.09
-  Printer wear..................... $0.02
-  Electricity...................... $0.01
-  Labor............................ $0.00
-  Hardware......................... $0.00
-  ────────────────────────────────────
-  TOTAL............................ $0.12
+  Material.......................... $36.65
+  Printer wear...................... $0.13
+  Electricity....................... $0.68
+  Labor............................. $0.00
+  Hardware.......................... $0.00
+  ─────────────────────────────────────
+  TOTAL............................. $37.45
 
-  sale price @ 50% / 60% / 70% margin:  $0.23  $0.29  $0.38
+  sale price @ 50% / 60% / 70% margin:  $74.90  $93.62  $124.83
 ```
 
 One argument, no configuration. Sliced files record which printer they
 were sliced for and what was in each slot, so `printcalc` starts from
-what the file already knows and asks you only for what it can't.
-
+what the file already knows and asks you only for what it can't.  
+> [!NOTE]  
+> Only tested with PrusaSlicer, OrcaSlicer, and Bambu Studio files
 ## Install
 
 ```sh
